@@ -1,8 +1,13 @@
 const SELECTOR = 'p, h1, h2, h3, h4, h5, h6, li, td, blockquote';
-let idCounter = 0;
 
 export class BilingualInjector {
+  private idCounter = 0;
+
   constructor(private root: HTMLElement | Document = document.body) {}
+
+  private get ownerDoc(): Document {
+    return this.root instanceof Document ? this.root : this.root.ownerDocument;
+  }
 
   getTargets(): HTMLElement[] {
     return Array.from(this.root.querySelectorAll<HTMLElement>(SELECTOR)).filter(
@@ -14,8 +19,8 @@ export class BilingualInjector {
   }
 
   inject(el: HTMLElement, translation: string): void {
-    el.setAttribute('data-xt-id', String(++idCounter));
-    const node = document.createElement(el.tagName.toLowerCase());
+    el.setAttribute('data-xt-id', String(++this.idCounter));
+    const node = this.ownerDoc.createElement(el.tagName.toLowerCase());
     node.className = 'xt-translation';
     node.textContent = translation;
     el.insertAdjacentElement('afterend', node);
@@ -28,5 +33,6 @@ export class BilingualInjector {
     for (const el of this.root.querySelectorAll<HTMLElement>('[data-xt-id]')) {
       el.removeAttribute('data-xt-id');
     }
+    this.idCounter = 0;
   }
 }

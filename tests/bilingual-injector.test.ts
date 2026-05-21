@@ -58,4 +58,14 @@ describe('BilingualInjector', () => {
     const injector = new BilingualInjector(document.body);
     expect(injector.getTargets()).toHaveLength(1);
   });
+
+  it('re-injection after clear produces exactly one translation per original element', () => {
+    document.body.innerHTML = '<p>Hello</p><p>World</p>';
+    const injector = new BilingualInjector(document.body);
+    for (const el of injector.getTargets()) injector.inject(el, '譯');
+    injector.clear();
+    for (const el of injector.getTargets()) injector.inject(el, '譯2');
+    expect(document.querySelectorAll('.xt-translation')).toHaveLength(2);
+    expect(document.querySelectorAll('[data-xt-id]')).toHaveLength(2);
+  });
 });
