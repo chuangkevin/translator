@@ -13,13 +13,9 @@
       "@": ["./src"],
       "@/*": ["./src/*"],
       "~": ["./src"],
-      "~/*": ["./src/*"],
-      "@@": ["."],
-      "@@/*": ["./*"],
-      "~~": ["."],
-      "~~/*": ["./*"]
+      "~/*": ["./src/*"]
     }
   },
-  "include": ["src", "tests", ".wxt/wxt.d.ts"],
-  "exclude": ["node_modules", ".output"]
+  "include": ["src", "tests"],
+  "exclude": ["node_modules", ".output", ".wxt"]
 }
