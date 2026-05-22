@@ -90,6 +90,13 @@ export default defineContentScript({
       toggleBilingual().catch(() => {});
     }
 
+    // YouTube SPA: re-translate when navigating between videos (DOM is swapped, not added)
+    window.addEventListener('yt-navigate-finish', () => {
+      if (bilingualEnabled && !isTranslating) {
+        translatePage().catch(() => {});
+      }
+    });
+
     // Alt+A: direct keydown listener — more reliable than chrome.commands relay via service worker
     document.addEventListener('keydown', (e: KeyboardEvent) => {
       if (e.altKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'a') {

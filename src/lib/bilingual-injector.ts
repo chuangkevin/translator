@@ -1,4 +1,4 @@
-const SELECTOR = 'p, h1, h2, h3, h4, h5, h6, li, td, blockquote';
+const SELECTOR = 'p, h1, h2, h3, h4, h5, h6, li, td, blockquote, #content-text, #video-title';
 
 // Characters that exist only in Simplified Chinese (not Traditional Chinese)
 const SIMPLIFIED_CHARS = new Set(
