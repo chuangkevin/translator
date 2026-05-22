@@ -50,6 +50,25 @@ export function parseVtt(vtt: string): CaptionSegment[] {
   return segments.filter((s, i) => i === 0 || s.text !== segments[i - 1].text);
 }
 
+// Read caption URL directly from an inline <script> tag on the page.
+// This is accessible from the isolated world (no MAIN-world bridge needed) and is the
+// fastest source because it is synchronous and works before ytInitialPlayerResponse fires.
+export function getCaptionUrlFromPageScript(): string | null {
+  for (const script of Array.from(document.scripts)) {
+    const text = script.textContent ?? '';
+    if (!text.includes('captionTracks')) continue;
+    const match = text.match(/"captionTracks":\s*\[.*?"baseUrl"\s*:\s*"([^"]+)"/s);
+    if (!match) continue;
+    const url = match[1]
+      .replace(/\\u0026/g, '&')
+      .replace(/\\u003d/g, '=')
+      .replace(/\\u003D/g, '=')
+      .replace(/\\\//g, '/');
+    return `${url}&fmt=vtt`;
+  }
+  return null;
+}
+
 // Read caption URL from the DOM attribute set by the MAIN-world bridge script injected
 // in content-youtube.ts (ytInitialPlayerResponse is not accessible from isolated world).
 export function getCaptionUrl(videoId?: string): string | null {

@@ -9,11 +9,21 @@ import type {
 } from '../lib/types';
 
 function isTraditionalChinesePage(): boolean {
+  // YouTube's lang attribute reflects the user's UI language, not the video content language.
+  // Sample the video title to detect the actual content language.
+  if (location.hostname.includes('youtube.com')) {
+    const titleEl = document.querySelector<HTMLElement>('h1, #title yt-formatted-string');
+    const sample = (titleEl?.textContent ?? '').trim();
+    if (!sample) return false; // can't detect → assume non-Chinese, translate
+    const cjkCount = (sample.match(/[一-鿿]/g) ?? []).length;
+    return cjkCount / Math.max(sample.length, 1) > 0.5;
+  }
+
   const lang = document.documentElement.lang.toLowerCase().trim();
   if (lang.startsWith('zh-tw') || lang.startsWith('zh-hk') || lang.startsWith('zh-hant') || lang.startsWith('zh-mo')) {
     return true;
   }
-  if (lang && !lang.startsWith('zh')) return false; // explicit non-Chinese
+  if (lang && !lang.startsWith('zh')) return false;
   // No lang / generic 'zh': sample body text
   const sample = (document.body?.textContent ?? '').replace(/\s+/g, '').slice(0, 500);
   const cjkCount = (sample.match(/[一-鿿]/g) ?? []).length;

@@ -1,4 +1,4 @@
-import { type CaptionSegment, fetchCaptionUrlFromApi, getCaptionUrl, parseVtt } from './youtube-vtt';
+import { type CaptionSegment, fetchCaptionUrlFromApi, getCaptionUrl, getCaptionUrlFromPageScript, parseVtt } from './youtube-vtt';
 
 // Kept for backward compatibility with tests
 export class LRUCache<K, V> {
@@ -28,19 +28,18 @@ export class LRUCache<K, V> {
 }
 
 const OVERLAY_CSS = [
-  'position:absolute',
-  'bottom:10%',
-  'left:5%',
-  'right:5%',
+  'position:fixed',
   'text-align:center',
   'color:#fff',
   'font-size:20px',
   'font-weight:bold',
   'text-shadow:0 1px 4px #000,0 0 8px #000',
   'pointer-events:none',
-  'z-index:200',
+  'z-index:2147483647',
   'line-height:1.5',
   'white-space:pre-wrap',
+  'padding:4px 8px',
+  'box-sizing:border-box',
 ].join(';');
 
 export class YoutubeCaptionTranslator {
@@ -83,33 +82,37 @@ export class YoutubeCaptionTranslator {
     this.segments = parseVtt(vttText);
     if (!this.segments.length) return;
 
-    const player = await this.waitForPlayer();
-    if (!player || this.currentVideoId !== videoId) return;
+    await this.waitForPlayer();
+    if (this.currentVideoId !== videoId) return;
 
-    this.createOverlay(player);
+    this.createOverlay();
     this.startPlayback();
     this.translateAll(videoId);
   }
 
   private async waitForCaptionUrl(videoId: string, maxMs = 5000): Promise<string | null> {
+    // 1. Fastest: read captionTracks from inline <script> tag (isolated-world accessible)
+    const fromScript = getCaptionUrlFromPageScript();
+    if (fromScript) return fromScript;
+
+    // 2. Poll dataset attribute written by the MAIN-world bridge in background.ts
     const deadline = Date.now() + maxMs;
     while (Date.now() < deadline) {
       const url = getCaptionUrl(videoId);
       if (url) return url;
       await new Promise<void>(r => setTimeout(r, 300));
     }
-    // Primary source (ytInitialPlayerResponse via DOM bridge) timed out — try API fallback
+
+    // 3. Last resort: YouTube timedtext list API
     return fetchCaptionUrlFromApi(videoId);
   }
 
-  private async waitForPlayer(maxMs = 10000): Promise<HTMLElement | null> {
+  private async waitForPlayer(maxMs = 10000): Promise<void> {
     const deadline = Date.now() + maxMs;
     while (Date.now() < deadline) {
-      const player = document.querySelector<HTMLElement>('#movie_player');
-      if (player) return player;
+      if (document.querySelector<HTMLVideoElement>('video')) return;
       await new Promise<void>(r => setTimeout(r, 200));
     }
-    return null;
   }
 
   private translateAll(videoId: string): void {
@@ -133,12 +136,12 @@ export class YoutubeCaptionTranslator {
     Promise.all(Array.from({ length: 5 }, worker)).catch(() => {});
   }
 
-  private createOverlay(player: HTMLElement): void {
+  private createOverlay(): void {
     this.overlay?.remove();
     const el = document.createElement('div');
     el.id = 'xt-yt-overlay';
     el.style.cssText = OVERLAY_CSS;
-    player.appendChild(el);
+    document.body.appendChild(el);
     this.overlay = el;
   }
 
@@ -150,6 +153,16 @@ export class YoutubeCaptionTranslator {
     const tick = () => {
       this.rafId = requestAnimationFrame(tick);
       if (!this.overlay) return;
+
+      // Keep overlay anchored to the video element regardless of scroll or layout changes
+      const rect = video.getBoundingClientRect();
+      if (rect.width > 0) {
+        const padH = rect.width * 0.05;
+        this.overlay.style.left = `${rect.left + padH}px`;
+        this.overlay.style.width = `${rect.width - padH * 2}px`;
+        this.overlay.style.bottom = `${window.innerHeight - rect.bottom + rect.height * 0.1}px`;
+      }
+
       const ms = video.currentTime * 1000;
       const seg = this.segments.find(s => ms >= s.startMs && ms < s.endMs);
       const key = `${seg?.startMs ?? ''}`;
