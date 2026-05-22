@@ -1,0 +1,66 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  release:
+    # Skip the version-bump commit this workflow pushes back to avoid an infinite loop
+    if: "!startsWith(github.event.head_commit.message, 'chore: bump version')"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Bump patch version
+        id: version
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          npm version patch --no-git-tag-version
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          git add package.json
+          git commit -m "chore: bump version to $VERSION"
+          git push
+
+      - name: Build & zip
+        run: npm run zip
+
+      - name: Find zip artifact
+        id: artifact
+        run: echo "file=$(ls .output/*.zip | head -1)" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
+          body: |
+            ## 安裝方式
+            1. 下載下方 `.zip` 並解壓縮
+            2. 開啟 Chrome，前往 `chrome://extensions`
+            3. 開啟右上角「開發人員模式」
+            4. 點「載入未封裝項目」，選擇解壓縮後的資料夾
+
+            ## 已知問題
+            - ⚠️ YouTube 字幕翻譯目前不可用
+            - ⚠️ YouTube 留言自動翻譯目前不可用
+          files: ${{ steps.artifact.outputs.file }}
