@@ -72,7 +72,7 @@ describe('OpenCodeClient.translate', () => {
     await expect(client.translate('Hello')).rejects.toBeInstanceOf(OpenCodeError);
   });
 
-  it('sends model payload with providerID and modelID from config', async () => {
+  it('POST /session uses id field in model', async () => {
     mockFetch(
       { ok: true, body: { id: 'sess-4' } },
       { ok: true, body: { parts: [{ type: 'text', text: '測試', synthetic: false }] } },
@@ -83,6 +83,20 @@ describe('OpenCodeClient.translate', () => {
     await client.translate('test');
 
     const sessionBody = JSON.parse((vi.mocked(fetch).mock.calls[0][1] as RequestInit).body as string);
-    expect(sessionBody.model).toEqual({ providerID: 'openai', modelID: 'chatgpt5.5', variant: 'default' });
+    expect(sessionBody.model).toEqual({ providerID: 'openai', id: 'chatgpt5.5', variant: 'default' });
+  });
+
+  it('POST /session/{id}/message uses modelID field in model', async () => {
+    mockFetch(
+      { ok: true, body: { id: 'sess-5' } },
+      { ok: true, body: { parts: [{ type: 'text', text: '測試', synthetic: false }] } },
+      { ok: true, body: {} },
+    );
+
+    const client = new OpenCodeClient(CONFIG);
+    await client.translate('test');
+
+    const msgBody = JSON.parse((vi.mocked(fetch).mock.calls[1][1] as RequestInit).body as string);
+    expect(msgBody.model).toEqual({ providerID: 'openai', modelID: 'chatgpt5.5', variant: 'default' });
   });
 });

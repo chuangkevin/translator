@@ -15,7 +15,14 @@ interface OpenCodeConfig {
   targetLang: string;
 }
 
-interface SessionModel {
+// POST /session uses "id"; POST /session/{id}/message uses "modelID"
+interface SessionCreateModel {
+  providerID: string;
+  id: string;
+  variant: 'default';
+}
+
+interface MessageModel {
   providerID: string;
   modelID: string;
   variant: 'default';
@@ -42,11 +49,17 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 }
 
 export class OpenCodeClient {
-  private sessionModel: SessionModel;
+  private createModel: SessionCreateModel;
+  private messageModel: MessageModel;
   private systemPrompt: string;
 
   constructor(private config: OpenCodeConfig) {
-    this.sessionModel = {
+    this.createModel = {
+      providerID: config.provider,
+      id: config.model,
+      variant: 'default',
+    };
+    this.messageModel = {
       providerID: config.provider,
       modelID: config.model,
       variant: 'default',
@@ -65,7 +78,7 @@ export class OpenCodeClient {
         body: JSON.stringify({
           title: 'translator',
           agent: 'general',
-          model: this.sessionModel,
+          model: this.createModel,
         }),
       }),
       SESSION_CREATE_TIMEOUT_MS,
@@ -83,7 +96,7 @@ export class OpenCodeClient {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             agent: 'general',
-            model: this.sessionModel,
+            model: this.messageModel,
             system: this.systemPrompt,
             parts: [{ type: 'text', text }],
           }),
