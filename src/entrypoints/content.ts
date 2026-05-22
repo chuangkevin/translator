@@ -110,6 +110,12 @@ function sendTranslate(text: string): Promise<TranslateResult> {
   return new Promise(resolve => {
     const msg: TranslateMessage = { type: 'translate', text };
     chrome.runtime.sendMessage(msg, (result: TranslateResult) => {
+      // Must read lastError to prevent Chrome from logging it as an uncaught error
+      const err = chrome.runtime.lastError;
+      if (err) {
+        resolve({ ok: false, error: err.message ?? 'Extension connection error' });
+        return;
+      }
       resolve(result ?? { ok: false, error: 'No response from background' });
     });
   });

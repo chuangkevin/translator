@@ -11,7 +11,9 @@ export default defineBackground(() => {
     if (command !== 'toggle-translation') return;
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id != null) {
-      chrome.tabs.sendMessage(tab.id, { type: 'toggle-translation' });
+      chrome.tabs.sendMessage(tab.id, { type: 'toggle-translation' }, () => {
+        void chrome.runtime.lastError; // suppress "no receiving end" errors
+      });
     }
   });
 
