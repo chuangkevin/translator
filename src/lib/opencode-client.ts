@@ -17,7 +17,7 @@ interface OpenCodeConfig {
 
 interface SessionModel {
   providerID: string;
-  id: string;
+  modelID: string;
   variant: 'default';
 }
 
@@ -48,7 +48,7 @@ export class OpenCodeClient {
   constructor(private config: OpenCodeConfig) {
     this.sessionModel = {
       providerID: config.provider,
-      id: config.model,
+      modelID: config.model,
       variant: 'default',
     };
     this.systemPrompt = `你是翻譯助手，將使用者的文字翻譯成${config.targetLang}，只輸出譯文，不加任何說明。`;

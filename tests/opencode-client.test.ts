@@ -72,7 +72,7 @@ describe('OpenCodeClient.translate', () => {
     await expect(client.translate('Hello')).rejects.toBeInstanceOf(OpenCodeError);
   });
 
-  it('sends model payload with providerID and id from config', async () => {
+  it('sends model payload with providerID and modelID from config', async () => {
     mockFetch(
       { ok: true, body: { id: 'sess-4' } },
       { ok: true, body: { parts: [{ type: 'text', text: '測試', synthetic: false }] } },
@@ -83,6 +83,6 @@ describe('OpenCodeClient.translate', () => {
     await client.translate('test');
 
     const sessionBody = JSON.parse((vi.mocked(fetch).mock.calls[0][1] as RequestInit).body as string);
-    expect(sessionBody.model).toEqual({ providerID: 'openai', id: 'chatgpt5.5', variant: 'default' });
+    expect(sessionBody.model).toEqual({ providerID: 'openai', modelID: 'chatgpt5.5', variant: 'default' });
   });
 });
