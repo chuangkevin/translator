@@ -17,9 +17,10 @@ const CSS = `
     z-index: 2147483646;
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: flex-end;
     gap: 8px;
     user-select: none;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
   .xt-fab-btn {
     width: 44px;
@@ -37,8 +38,20 @@ const CSS = `
   }
   .xt-fab-btn:hover { background: #f5f5f5; }
   .xt-fab-btn.xt-active { background: #e8f0fe; border-color: #1a73e8; }
-  .xt-fab-btn.xt-error { border-color: #d32f2f; }
-  .xt-menu { display: flex; flex-direction: column; gap: 8px; }
+  .xt-fab-btn.xt-error { border-color: #d32f2f; background: #fce8e6; }
+  .xt-menu { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+  .xt-error-tip {
+    background: #d32f2f;
+    color: #fff;
+    font-size: 11px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    max-width: 180px;
+    text-align: right;
+    line-height: 1.4;
+  }
 `;
 
 export class FloatingButton {
@@ -76,9 +89,10 @@ export class FloatingButton {
     this.host.innerHTML = `
       <div id="xt-fab">
         <div class="xt-menu">
+          ${error ? '<div class="xt-error-tip">翻譯失敗<br>請確認 OpenCode 伺服器設定</div>' : ''}
           <button class="xt-fab-btn ${bilingualEnabled ? 'xt-active' : ''} ${error ? 'xt-error' : ''}"
-                  id="xt-btn-bilingual" title="雙語翻譯">
-            ${bilingualEnabled ? '🔤' : '💬'}
+                  id="xt-btn-bilingual" title="${error ? '翻譯失敗 - 點此重試' : '雙語翻譯'}">
+            ${error ? '⚠️' : bilingualEnabled ? '🔤' : '💬'}
           </button>
           <button class="xt-fab-btn ${selectionEnabled ? 'xt-active' : ''}"
                   id="xt-btn-selection" title="選取翻譯">

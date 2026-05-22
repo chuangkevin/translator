@@ -7,6 +7,7 @@ export default defineConfig({
     name: 'Translator',
     description: 'AI-powered bilingual page translation',
     permissions: ['storage', 'activeTab', 'scripting'],
+    host_permissions: ['<all_urls>'],
     commands: {
       'toggle-translation': {
         suggested_key: { default: 'Alt+A' },
