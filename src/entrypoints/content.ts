@@ -1,6 +1,6 @@
 import { BilingualInjector, isSimplifiedChinese } from '../lib/bilingual-injector';
 import { FloatingButton } from '../lib/floating-button';
-import { getSettings, saveSettings, getSiteRules } from '../lib/storage';
+import { getSiteRules } from '../lib/storage';
 import type {
   TranslateMessage,
   TranslateResult,
@@ -14,8 +14,7 @@ export default defineContentScript({
 
   async main() {
     console.log('[Translator CS] Content script started on', location.href);
-    const settings = await getSettings();
-    let bilingualEnabled = settings.bilingualEnabled;
+    let bilingualEnabled = false; // always start fresh — state reflects actual page content
 
     // Check site rules before mounting anything
     const siteRules = await getSiteRules();
@@ -57,7 +56,6 @@ export default defineContentScript({
 
     async function toggleBilingual() {
       bilingualEnabled = !bilingualEnabled;
-      await saveSettings({ bilingualEnabled });
       floatingBtn.updateState({ bilingualEnabled, loading: false, error: false });
       console.log('[Translator CS] bilingual toggled to', bilingualEnabled);
       if (bilingualEnabled) {
