@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <title>Translator 設定</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f9f9f9; color: #333; }
+    .container { max-width: 520px; margin: 40px auto; padding: 0 20px; }
+    h1 { font-size: 22px; font-weight: 600; margin-bottom: 28px; color: #1a1a1a; }
+    .field { margin-bottom: 20px; }
+    label { display: block; font-size: 14px; font-weight: 500; margin-bottom: 6px; color: #555; }
+    input[type="text"], input[type="url"] {
+      width: 100%; padding: 9px 12px; border: 1px solid #d0d0d0;
+      border-radius: 6px; font-size: 14px; outline: none; background: #fff;
+    }
+    input:focus { border-color: #1a73e8; box-shadow: 0 0 0 2px rgba(26,115,232,0.15); }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    button {
+      padding: 10px 24px; background: #1a73e8; color: #fff; border: none;
+      border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer;
+    }
+    button:hover { background: #1558b0; }
+    #status { margin-top: 12px; font-size: 13px; color: #2e7d32; min-height: 20px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Translator 設定</h1>
+    <div class="field">
+      <label for="serverUrl">OpenCode Server URL</label>
+      <input type="url" id="serverUrl" placeholder="http://localhost:3000" />
+    </div>
+    <div class="row">
+      <div class="field">
+        <label for="provider">Provider</label>
+        <input type="text" id="provider" placeholder="openai" />
+      </div>
+      <div class="field">
+        <label for="model">Model</label>
+        <input type="text" id="model" placeholder="chatgpt5.5" />
+      </div>
+    </div>
+    <div class="field">
+      <label for="targetLang">目標語言</label>
+      <input type="text" id="targetLang" placeholder="繁體中文" />
+    </div>
+    <button id="save">儲存</button>
+    <div id="status"></div>
+  </div>
+  <script type="module" src="index.ts"></script>
+</body>
+</html>
