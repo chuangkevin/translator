@@ -1,5 +1,19 @@
 const SELECTOR = 'p, h1, h2, h3, h4, h5, h6, li, td, blockquote';
 
+// Characters that exist only in Simplified Chinese (not Traditional Chinese)
+const SIMPLIFIED_CHARS = new Set(
+  '们书爱见说这来时头国动过间经联决达产层将补导电发风够关规号话华环获际量领论没农气钱强亲请区认识属树岁谈体听务系选义应优语员运长针众么',
+);
+
+export function isSimplifiedChinese(text: string): boolean {
+  // Japanese text contains hiragana/katakana — don't misidentify as Chinese
+  if (/[぀-ゟ゠-ヿ]/.test(text)) return false;
+  for (const char of text) {
+    if (SIMPLIFIED_CHARS.has(char)) return true;
+  }
+  return false;
+}
+
 export class BilingualInjector {
   private idCounter = 0;
 
@@ -13,6 +27,7 @@ export class BilingualInjector {
     return Array.from(this.root.querySelectorAll<HTMLElement>(SELECTOR)).filter(
       el =>
         !el.hasAttribute('data-xt-id') &&
+        !el.hasAttribute('data-xt-orig') &&
         !el.classList.contains('xt-translation') &&
         (el.textContent?.trim().length ?? 0) > 0,
     );
@@ -53,12 +68,21 @@ export class BilingualInjector {
     this.fulfill(node, translation);
   }
 
+  replaceSimplified(el: HTMLElement, translation: string): void {
+    el.setAttribute('data-xt-orig', el.textContent ?? '');
+    el.textContent = translation;
+  }
+
   clear(): void {
     for (const el of this.root.querySelectorAll<HTMLElement>('.xt-translation')) {
       el.remove();
     }
     for (const el of this.root.querySelectorAll<HTMLElement>('[data-xt-id]')) {
       el.removeAttribute('data-xt-id');
+    }
+    for (const el of this.root.querySelectorAll<HTMLElement>('[data-xt-orig]')) {
+      el.textContent = el.getAttribute('data-xt-orig') ?? '';
+      el.removeAttribute('data-xt-orig');
     }
     this.idCounter = 0;
   }

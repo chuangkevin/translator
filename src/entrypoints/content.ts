@@ -1,4 +1,4 @@
-import { BilingualInjector } from '../lib/bilingual-injector';
+import { BilingualInjector, isSimplifiedChinese } from '../lib/bilingual-injector';
 import { FloatingButton } from '../lib/floating-button';
 import { getSettings, saveSettings, getSiteRules } from '../lib/storage';
 import type {
@@ -85,7 +85,13 @@ export default defineContentScript({
             if (!text) return;
             const result = await sendTranslate(text);
             if (result.ok) {
-              injector.fulfill(placeholders[i], result.translation);
+              if (isSimplifiedChinese(text)) {
+                placeholders[i].remove();
+                el.removeAttribute('data-xt-id');
+                injector.replaceSimplified(el, result.translation);
+              } else {
+                injector.fulfill(placeholders[i], result.translation);
+              }
               successCount++;
             } else {
               // Remove placeholder and clear marker on original element

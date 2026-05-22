@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { BilingualInjector } from '../src/lib/bilingual-injector';
+import { BilingualInjector, isSimplifiedChinese } from '../src/lib/bilingual-injector';
 
 describe('BilingualInjector', () => {
   beforeEach(() => {
@@ -67,6 +67,51 @@ describe('BilingualInjector', () => {
     for (const el of injector.getTargets()) injector.inject(el, '譯2');
     expect(document.querySelectorAll('.xt-translation')).toHaveLength(2);
     expect(document.querySelectorAll('[data-xt-id]')).toHaveLength(2);
+  });
+
+  it('replaceSimplified replaces element text and stores original in data-xt-orig', () => {
+    document.body.innerHTML = '<p>书山有路</p>';
+    const injector = new BilingualInjector(document.body);
+    const p = document.querySelector('p')!;
+    injector.replaceSimplified(p, '書山有路');
+
+    expect(p.textContent).toBe('書山有路');
+    expect(p.getAttribute('data-xt-orig')).toBe('书山有路');
+    expect(injector.getTargets()).toHaveLength(0);
+  });
+
+  it('clear restores simplified Chinese replacements', () => {
+    document.body.innerHTML = '<p>书山有路</p>';
+    const injector = new BilingualInjector(document.body);
+    const p = document.querySelector('p')!;
+    injector.replaceSimplified(p, '書山有路');
+    injector.clear();
+
+    expect(p.textContent).toBe('书山有路');
+    expect(p.hasAttribute('data-xt-orig')).toBe(false);
+    expect(injector.getTargets()).toHaveLength(1);
+  });
+});
+
+describe('isSimplifiedChinese', () => {
+  it('detects simplified Chinese characters', () => {
+    expect(isSimplifiedChinese('今天天气很好')).toBe(true); // 气
+    expect(isSimplifiedChinese('我们一起去')).toBe(true);   // 们
+    expect(isSimplifiedChinese('这本书很好')).toBe(true);   // 这, 书
+  });
+
+  it('returns false for Traditional Chinese', () => {
+    expect(isSimplifiedChinese('今天天氣很好')).toBe(false);
+    expect(isSimplifiedChinese('我們一起去')).toBe(false);
+    expect(isSimplifiedChinese('這本書很好')).toBe(false);
+  });
+
+  it('returns false for English text', () => {
+    expect(isSimplifiedChinese('Hello World')).toBe(false);
+  });
+
+  it('returns false for Japanese text even with CJK characters', () => {
+    expect(isSimplifiedChinese('今日はいい天気ですね')).toBe(false); // contains hiragana
   });
 
   it('injectPlaceholder inserts a node with "…" and opacity 0.4', () => {
