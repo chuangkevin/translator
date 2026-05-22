@@ -5,8 +5,8 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const publicDir = path.join(__dirname, '..', 'public');
-if (!existsSync(publicDir)) mkdirSync(publicDir);
+const publicDir = path.join(__dirname, '..', 'src', 'public');
+if (!existsSync(publicDir)) mkdirSync(publicDir, { recursive: true });
 
 const html = `<!DOCTYPE html>
 <html>

@@ -3,6 +3,7 @@ import { defineConfig } from 'wxt';
 export default defineConfig({
   srcDir: 'src',
   outDir: '.output',
+
   manifest: {
     name: 'Translator',
     description: 'AI-powered bilingual page translation',
