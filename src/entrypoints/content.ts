@@ -55,6 +55,36 @@ export default defineContentScript({
     floatingBtn.mount();
     floatingBtn.updateState({ bilingualEnabled: false, loading: false, error: false });
 
+    let mutationObserver: MutationObserver | null = null;
+    let pendingEls = new Set<HTMLElement>();
+    let debounceId: ReturnType<typeof setTimeout> | null = null;
+
+    function startObserver() {
+      mutationObserver = new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+          for (const node of mutation.addedNodes) {
+            if (!(node instanceof HTMLElement)) continue;
+            for (const el of injector.getNewTargets(node)) pendingEls.add(el);
+          }
+        }
+        if (pendingEls.size === 0) return;
+        if (debounceId !== null) clearTimeout(debounceId);
+        debounceId = setTimeout(() => {
+          const els = Array.from(pendingEls);
+          pendingEls.clear();
+          Promise.all(els.map(el => translateEl(el))).catch(() => {});
+        }, 200);
+      });
+      mutationObserver.observe(document.body, { childList: true, subtree: true });
+    }
+
+    function stopObserver() {
+      mutationObserver?.disconnect();
+      mutationObserver = null;
+      if (debounceId !== null) { clearTimeout(debounceId); debounceId = null; }
+      pendingEls.clear();
+    }
+
     // Auto-translate: 'always' domain forces it; otherwise translate any non-Traditional-Chinese page
     if (!isSkipped && (domainBehavior === 'always' || !isTraditionalChinesePage())) {
       toggleBilingual().catch(() => {});
@@ -82,14 +112,35 @@ export default defineContentScript({
     });
 
     async function toggleBilingual() {
-      if (isTranslating) return; // ignore toggle during active translation
+      if (isTranslating) return;
       bilingualEnabled = !bilingualEnabled;
       console.log('[Translator CS] bilingual toggled to', bilingualEnabled);
       if (bilingualEnabled) {
+        startObserver(); // start before translatePage so elements added during slow translation are caught
         await translatePage();
       } else {
+        stopObserver();
         floatingBtn.updateState({ bilingualEnabled: false, loading: false, error: false });
         injector.clear();
+      }
+    }
+
+    async function translateEl(el: HTMLElement): Promise<void> {
+      const text = el.textContent?.trim() ?? '';
+      if (!text) return;
+      const placeholder = injector.injectPlaceholder(el);
+      const result = await sendTranslate(text);
+      if (result.ok) {
+        if (isSimplifiedChinese(text)) {
+          placeholder.remove();
+          el.removeAttribute('data-xt-id');
+          injector.replaceSimplified(el, result.translation);
+        } else {
+          injector.fulfill(placeholder, result.translation);
+        }
+      } else {
+        placeholder.remove();
+        el.removeAttribute('data-xt-id');
       }
     }
 
@@ -99,25 +150,24 @@ export default defineContentScript({
       floatingBtn.updateState({ bilingualEnabled: true, loading: true, error: false });
       try {
         const targets = injector.getTargets();
-        const placeholders = targets.map(el => injector.injectPlaceholder(el));
-
         let successCount = 0;
         await Promise.all(
-          targets.map(async (el, i) => {
+          targets.map(async el => {
             const text = el.textContent?.trim() ?? '';
             if (!text) return;
+            const placeholder = injector.injectPlaceholder(el);
             const result = await sendTranslate(text);
             if (result.ok) {
               if (isSimplifiedChinese(text)) {
-                placeholders[i].remove();
+                placeholder.remove();
                 el.removeAttribute('data-xt-id');
                 injector.replaceSimplified(el, result.translation);
               } else {
-                injector.fulfill(placeholders[i], result.translation);
+                injector.fulfill(placeholder, result.translation);
               }
               successCount++;
             } else {
-              placeholders[i].remove();
+              placeholder.remove();
               el.removeAttribute('data-xt-id');
             }
           }),
@@ -125,7 +175,8 @@ export default defineContentScript({
 
         const allFailed = targets.length > 0 && successCount === 0;
         if (allFailed) {
-          bilingualEnabled = false; // revert — nothing was actually translated
+          bilingualEnabled = false;
+          stopObserver();
         }
         floatingBtn.updateState({ bilingualEnabled, loading: false, error: allFailed });
       } finally {

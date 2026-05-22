@@ -23,14 +23,29 @@ export class BilingualInjector {
     return this.root instanceof Document ? this.root : this.root.ownerDocument;
   }
 
-  getTargets(): HTMLElement[] {
-    return Array.from(this.root.querySelectorAll<HTMLElement>(SELECTOR)).filter(
-      el =>
-        !el.hasAttribute('data-xt-id') &&
-        !el.hasAttribute('data-xt-orig') &&
-        !el.classList.contains('xt-translation') &&
-        (el.textContent?.trim().length ?? 0) > 0,
+  private isTarget(el: HTMLElement): boolean {
+    return (
+      el.matches(SELECTOR) &&
+      !el.hasAttribute('data-xt-id') &&
+      !el.hasAttribute('data-xt-orig') &&
+      !el.classList.contains('xt-translation') &&
+      (el.textContent?.trim().length ?? 0) > 0
     );
+  }
+
+  getTargets(): HTMLElement[] {
+    return Array.from(this.root.querySelectorAll<HTMLElement>(SELECTOR)).filter(el =>
+      this.isTarget(el),
+    );
+  }
+
+  getNewTargets(root: HTMLElement): HTMLElement[] {
+    const results: HTMLElement[] = [];
+    if (this.isTarget(root)) results.push(root);
+    for (const el of root.querySelectorAll<HTMLElement>(SELECTOR)) {
+      if (this.isTarget(el)) results.push(el);
+    }
+    return results;
   }
 
   injectPlaceholder(el: HTMLElement): HTMLElement {
