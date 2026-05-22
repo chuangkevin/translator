@@ -81,8 +81,10 @@ export default defineContentScript({
     async function translatePage() {
       if (isTranslating) return;
       isTranslating = true;
+      floatingBtn.updateState({ bilingualEnabled, selectionEnabled, error: false });
       try {
         const targets = injector.getTargets();
+        let successCount = 0;
         await Promise.all(
           targets.map(async (el) => {
             const text = el.textContent?.trim() ?? '';
@@ -90,11 +92,13 @@ export default defineContentScript({
             const result = await sendTranslate(text);
             if (result.ok) {
               injector.inject(el, result.translation);
-            } else {
-              floatingBtn.updateState({ bilingualEnabled, selectionEnabled, error: true });
+              successCount++;
             }
           }),
         );
+        if (targets.length > 0 && successCount === 0) {
+          floatingBtn.updateState({ bilingualEnabled, selectionEnabled, error: true });
+        }
       } finally {
         isTranslating = false;
       }

@@ -6,7 +6,7 @@ export default defineConfig({
   manifest: {
     name: 'Translator',
     description: 'AI-powered bilingual page translation',
-    permissions: ['storage', 'activeTab', 'scripting'],
+    permissions: ['storage', 'activeTab', 'scripting', 'tabs'],
     host_permissions: ['<all_urls>'],
     commands: {
       'toggle-translation': {

@@ -23,6 +23,20 @@ export class BilingualInjector {
     const node = this.ownerDoc.createElement(el.tagName.toLowerCase());
     node.className = 'xt-translation';
     node.textContent = translation;
+    const win = this.ownerDoc.defaultView;
+    if (win) {
+      const cs = win.getComputedStyle(el);
+      node.style.cssText = [
+        `font-family:${cs.fontFamily}`,
+        `font-size:${cs.fontSize}`,
+        `font-weight:${cs.fontWeight}`,
+        `font-style:${cs.fontStyle}`,
+        `line-height:${cs.lineHeight}`,
+        `color:${cs.color}`,
+        `margin-top:${cs.marginTop}`,
+        `margin-bottom:${cs.marginBottom}`,
+      ].join(';');
+    }
     el.insertAdjacentElement('afterend', node);
   }
 
