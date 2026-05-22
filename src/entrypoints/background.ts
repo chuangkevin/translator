@@ -35,13 +35,13 @@ export default defineBackground(() => {
           const translator = new Translator(client);
           const result = await translator.translate(message.text);
           if (!result.ok) {
-            console.error('[Translator BG] translate failed:', result.error, '| serverUrl:', settings.serverUrl);
+            console.warn('[Translator BG] translate failed:', result.error, '| serverUrl:', settings.serverUrl);
           } else {
             console.log('[Translator BG] translate ok | result:', result.translation?.slice(0, 40));
           }
           sendResponse(result);
         } catch (e) {
-          console.error('[Translator BG] unexpected error:', e);
+          console.warn('[Translator BG] unexpected error:', e);
           sendResponse({ ok: false, error: String(e) });
         }
       })();
