@@ -4,6 +4,8 @@ import { getSettings } from '../lib/storage';
 import type { TranslateMessage, TranslateResult } from '../lib/types';
 
 export default defineBackground(() => {
+  console.log('[Translator BG] Service worker started');
+
   // Keyboard command → relay toggle to active tab content script
   chrome.commands.onCommand.addListener(async (command) => {
     if (command !== 'toggle-translation') return;
@@ -20,6 +22,7 @@ export default defineBackground(() => {
 
       (async () => {
         const settings = await getSettings();
+        console.log('[Translator BG] translate request | serverUrl:', settings.serverUrl, '| text:', message.text.slice(0, 40));
         const client = new OpenCodeClient({
           serverUrl: settings.serverUrl,
           provider: settings.provider,
@@ -28,6 +31,11 @@ export default defineBackground(() => {
         });
         const translator = new Translator(client);
         const result = await translator.translate(message.text);
+        if (!result.ok) {
+          console.error('[Translator BG] translate failed:', result.error, '| serverUrl:', settings.serverUrl);
+        } else {
+          console.log('[Translator BG] translate ok | result:', result.translation?.slice(0, 40));
+        }
         sendResponse(result);
       })();
 

@@ -9,18 +9,19 @@ export default defineContentScript({
   runAt: 'document_idle',
 
   async main() {
+    console.log('[Translator CS] Content script started on', location.href);
     const settings = await getSettings();
     let bilingualEnabled = settings.bilingualEnabled;
     let selectionEnabled = settings.selectionEnabled;
 
     const injector = new BilingualInjector(document.body);
 
-    const selectionPopup = new SelectionPopup(async (text) => {
+    const selectionPopup = new SelectionPopup(async (text, requestId) => {
       const result = await sendTranslate(text);
       if (result.ok) {
-        selectionPopup.setTranslation(result.translation);
+        selectionPopup.setTranslation(result.translation, requestId);
       } else {
-        selectionPopup.setError();
+        selectionPopup.setError(requestId);
       }
     });
     selectionPopup.mount();
@@ -62,6 +63,7 @@ export default defineContentScript({
       bilingualEnabled = !bilingualEnabled;
       await saveSettings({ bilingualEnabled });
       floatingBtn.updateState({ bilingualEnabled, selectionEnabled, error: false });
+      console.log('[Translator CS] bilingual toggled to', bilingualEnabled);
       if (bilingualEnabled) {
         await translatePage();
       } else {

@@ -1,7 +1,8 @@
-export type TranslateCallback = (text: string) => void;
+export type TranslateCallback = (text: string, requestId: number) => void;
 
 export class SelectionPopup {
   private el: HTMLDivElement | null = null;
+  private requestId = 0;
 
   constructor(private onTranslate: TranslateCallback) {}
 
@@ -29,6 +30,7 @@ export class SelectionPopup {
 
   show(text: string, pos: { x: number; y: number }): void {
     if (!this.el) return;
+    const id = ++this.requestId;
     this.el.innerHTML = `
       <div style="color:#555;font-size:12px;margin-bottom:4px">原文</div>
       <div style="color:#333">${escapeHtml(text)}</div>
@@ -39,15 +41,17 @@ export class SelectionPopup {
     this.el.style.left = `${Math.min(pos.x, window.innerWidth - 340)}px`;
     this.el.style.top = `${pos.y + margin}px`;
     this.el.style.display = 'block';
-    this.onTranslate(text);
+    this.onTranslate(text, id);
   }
 
-  setTranslation(translation: string): void {
+  setTranslation(translation: string, requestId: number): void {
+    if (requestId !== this.requestId) return;
     const node = this.el?.querySelector('.xt-popup-translation');
     if (node) node.textContent = translation;
   }
 
-  setError(): void {
+  setError(requestId: number): void {
+    if (requestId !== this.requestId) return;
     const node = this.el?.querySelector('.xt-popup-translation');
     if (node) {
       (node as HTMLElement).style.color = '#d32f2f';
@@ -70,5 +74,6 @@ function escapeHtml(text: string): string {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
