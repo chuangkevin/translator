@@ -36,6 +36,13 @@ export class YoutubeCaptionTranslator {
   start(): void {
     this.observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
+        if (mutation.type === 'characterData') {
+          const parent = (mutation.target as Text).parentElement;
+          if (parent?.classList.contains('ytp-caption-segment')) {
+            this.handleSegment(parent);
+          }
+          continue;
+        }
         for (const node of mutation.addedNodes) {
           if (node instanceof HTMLElement && node.classList.contains('ytp-caption-segment')) {
             this.handleSegment(node);
@@ -49,7 +56,7 @@ export class YoutubeCaptionTranslator {
       }
     });
 
-    this.observer.observe(document.body, { subtree: true, childList: true });
+    this.observer.observe(document.body, { subtree: true, childList: true, characterData: true });
   }
 
   stop(): void {
@@ -75,9 +82,12 @@ export class YoutubeCaptionTranslator {
         const translation = await this.onTranslate(text);
         if (translation) {
           this.cache.set(text, translation);
-          this.appendTranslation(segment, translation);
+          // Segment may still be in DOM even if caption has scrolled; update if still present
+          if (document.contains(segment)) {
+            this.appendTranslation(segment, translation);
+          }
         }
-      }, 200),
+      }, 100),
     );
   }
 
