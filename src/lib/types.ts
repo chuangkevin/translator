@@ -10,7 +10,7 @@ export interface ExtensionSettings {
 export const DEFAULT_SETTINGS: ExtensionSettings = {
   serverUrl: 'http://localhost:3000',
   provider: 'openai',
-  model: 'chatgpt5.5',
+  model: 'gpt-5.5',
   targetLang: '繁體中文',
   bilingualEnabled: false,
   selectionEnabled: true,
