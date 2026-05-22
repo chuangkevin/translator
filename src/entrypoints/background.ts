@@ -23,22 +23,27 @@ export default defineBackground(() => {
       if (message.type !== 'translate') return false;
 
       (async () => {
-        const settings = await getSettings();
-        console.log('[Translator BG] translate request | serverUrl:', settings.serverUrl, '| text:', message.text.slice(0, 40));
-        const client = new OpenCodeClient({
-          serverUrl: settings.serverUrl,
-          provider: settings.provider,
-          model: settings.model,
-          targetLang: settings.targetLang,
-        });
-        const translator = new Translator(client);
-        const result = await translator.translate(message.text);
-        if (!result.ok) {
-          console.error('[Translator BG] translate failed:', result.error, '| serverUrl:', settings.serverUrl);
-        } else {
-          console.log('[Translator BG] translate ok | result:', result.translation?.slice(0, 40));
+        try {
+          const settings = await getSettings();
+          console.log('[Translator BG] translate request | serverUrl:', settings.serverUrl, '| text:', message.text.slice(0, 40));
+          const client = new OpenCodeClient({
+            serverUrl: settings.serverUrl,
+            provider: settings.provider,
+            model: settings.model,
+            targetLang: settings.targetLang,
+          });
+          const translator = new Translator(client);
+          const result = await translator.translate(message.text);
+          if (!result.ok) {
+            console.error('[Translator BG] translate failed:', result.error, '| serverUrl:', settings.serverUrl);
+          } else {
+            console.log('[Translator BG] translate ok | result:', result.translation?.slice(0, 40));
+          }
+          sendResponse(result);
+        } catch (e) {
+          console.error('[Translator BG] unexpected error:', e);
+          sendResponse({ ok: false, error: String(e) });
         }
-        sendResponse(result);
       })();
 
       return true; // keep message channel open for async response
