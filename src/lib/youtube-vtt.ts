@@ -50,12 +50,32 @@ export function parseVtt(vtt: string): CaptionSegment[] {
   return segments.filter((s, i) => i === 0 || s.text !== segments[i - 1].text);
 }
 
+// Read caption URL from the DOM attribute set by the MAIN-world bridge script injected
+// in content-youtube.ts (ytInitialPlayerResponse is not accessible from isolated world).
 export function getCaptionUrl(videoId?: string): string | null {
-  const data = (window as any).ytInitialPlayerResponse;
-  if (!data) return null;
-  if (videoId && data?.videoDetails?.videoId !== videoId) return null;
-  const tracks: any[] = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks ?? [];
-  if (!tracks.length) return null;
-  const baseUrl: string | undefined = tracks[0]?.baseUrl;
-  return baseUrl ? `${baseUrl}&fmt=vtt` : null;
+  const el = document.documentElement;
+  const url = el.dataset.xtCaptionUrl;
+  if (!url) return null;
+  if (videoId && el.dataset.xtVideoId !== videoId) return null;
+  return url;
+}
+
+// Fallback: YouTube's timedtext list API when ytInitialPlayerResponse is unavailable.
+export async function fetchCaptionUrlFromApi(videoId: string): Promise<string | null> {
+  try {
+    const resp = await fetch(`https://www.youtube.com/api/timedtext?v=${videoId}&type=list`);
+    if (!resp.ok) return null;
+    const xml = await resp.text();
+    const doc = new DOMParser().parseFromString(xml, 'text/xml');
+    const track = doc.querySelector('track');
+    if (!track) return null;
+    const lang = track.getAttribute('lang_code') ?? 'en';
+    const name = track.getAttribute('name') ?? '';
+    const kind = track.getAttribute('kind') ?? '';
+    const params = new URLSearchParams({ v: videoId, lang, name, fmt: 'vtt' });
+    if (kind) params.set('kind', kind);
+    return `https://www.youtube.com/api/timedtext?${params}`;
+  } catch {
+    return null;
+  }
 }

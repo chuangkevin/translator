@@ -1,4 +1,4 @@
-import { type CaptionSegment, getCaptionUrl, parseVtt } from './youtube-vtt';
+import { type CaptionSegment, fetchCaptionUrlFromApi, getCaptionUrl, parseVtt } from './youtube-vtt';
 
 // Kept for backward compatibility with tests
 export class LRUCache<K, V> {
@@ -91,14 +91,15 @@ export class YoutubeCaptionTranslator {
     this.translateAll(videoId);
   }
 
-  private async waitForCaptionUrl(videoId: string, maxMs = 8000): Promise<string | null> {
+  private async waitForCaptionUrl(videoId: string, maxMs = 5000): Promise<string | null> {
     const deadline = Date.now() + maxMs;
     while (Date.now() < deadline) {
       const url = getCaptionUrl(videoId);
       if (url) return url;
       await new Promise<void>(r => setTimeout(r, 300));
     }
-    return null;
+    // Primary source (ytInitialPlayerResponse via DOM bridge) timed out — try API fallback
+    return fetchCaptionUrlFromApi(videoId);
   }
 
   private async waitForPlayer(maxMs = 10000): Promise<HTMLElement | null> {
