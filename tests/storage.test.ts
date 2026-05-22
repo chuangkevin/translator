@@ -18,7 +18,7 @@ describe('getSettings', () => {
     const settings = await getSettings();
     expect(settings.serverUrl).toBe('http://localhost:3000');
     expect(settings.provider).toBe('openai');
-    expect(settings.model).toBe('chatgpt5.5');
+    expect(settings.model).toBe('gpt-5.5');
     expect(settings.targetLang).toBe('繁體中文');
     expect(settings.bilingualEnabled).toBe(false);
     expect(settings.selectionEnabled).toBe(true);

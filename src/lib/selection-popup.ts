@@ -19,7 +19,8 @@ export class SelectionPopup {
       'border-radius:8px',
       'padding:10px 14px',
       'box-shadow:0 4px 16px rgba(0,0,0,0.15)',
-      'font-size:14px',
+      'font-family:inherit',
+      'font-size:1em',
       'line-height:1.5',
       'max-width:320px',
       'word-break:break-word',
@@ -32,9 +33,9 @@ export class SelectionPopup {
     if (!this.el) return;
     const id = ++this.requestId;
     this.el.innerHTML = `
-      <div style="color:#555;font-size:12px;margin-bottom:4px">原文</div>
+      <div style="color:#555;font-size:0.85em;margin-bottom:4px">原文</div>
       <div style="color:#333">${escapeHtml(text)}</div>
-      <div style="color:#555;font-size:12px;margin:6px 0 4px">譯文</div>
+      <div style="color:#555;font-size:0.85em;margin:6px 0 4px">譯文</div>
       <div class="xt-popup-translation" style="color:#1a73e8">翻譯中…</div>
     `;
     const margin = 8;
