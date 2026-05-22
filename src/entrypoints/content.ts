@@ -8,38 +8,55 @@ import type {
   ApplySiteRuleMessage,
 } from '../lib/types';
 
+function isTraditionalChinesePage(): boolean {
+  const lang = document.documentElement.lang.toLowerCase().trim();
+  if (lang.startsWith('zh-tw') || lang.startsWith('zh-hk') || lang.startsWith('zh-hant') || lang.startsWith('zh-mo')) {
+    return true;
+  }
+  if (lang && !lang.startsWith('zh')) return false; // explicit non-Chinese
+  // No lang / generic 'zh': sample body text
+  const sample = (document.body?.textContent ?? '').replace(/\s+/g, '').slice(0, 500);
+  const cjkCount = (sample.match(/[一-鿿]/g) ?? []).length;
+  if (cjkCount < 30) return false;
+  return !isSimplifiedChinese(sample);
+}
+
 export default defineContentScript({
   matches: ['<all_urls>'],
   runAt: 'document_idle',
 
   async main() {
     console.log('[Translator CS] Content script started on', location.href);
-    let bilingualEnabled = false; // always start fresh — state reflects actual page content
+    let bilingualEnabled = false;
+    let isTranslating = false;
 
-    // Check site rules before mounting anything
     const siteRules = await getSiteRules();
     const domain = location.hostname;
     const pageKey = location.origin + location.pathname;
     const domainBehavior = siteRules.domains[domain];
     const isSkipped = siteRules.skipUrls.includes(pageKey);
 
-    if (domainBehavior === 'never') {
-      // Don't mount anything, exit silently
-      return;
-    }
+    if (domainBehavior === 'never') return;
 
     const injector = new BilingualInjector(document.body);
-
     const floatingBtn = new FloatingButton({
       onToggleBilingual: () => { toggleBilingual().catch(() => {}); },
     });
     floatingBtn.mount();
-    floatingBtn.updateState({ bilingualEnabled, loading: false, error: false });
+    floatingBtn.updateState({ bilingualEnabled: false, loading: false, error: false });
 
-    // Auto-translate if domain is set to 'always'
-    if (domainBehavior === 'always' && !isSkipped && !bilingualEnabled) {
+    // Auto-translate: 'always' domain forces it; otherwise translate any non-Traditional-Chinese page
+    if (!isSkipped && (domainBehavior === 'always' || !isTraditionalChinesePage())) {
       toggleBilingual().catch(() => {});
     }
+
+    // Alt+A: direct keydown listener — more reliable than chrome.commands relay via service worker
+    document.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.altKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        toggleBilingual().catch(() => {});
+      }
+    }, { capture: true });
 
     chrome.runtime.onMessage.addListener((message: ToggleTranslationMessage | ApplySiteRuleMessage) => {
       if (message.type === 'toggle-translation') {
@@ -55,25 +72,23 @@ export default defineContentScript({
     });
 
     async function toggleBilingual() {
+      if (isTranslating) return; // ignore toggle during active translation
       bilingualEnabled = !bilingualEnabled;
-      floatingBtn.updateState({ bilingualEnabled, loading: false, error: false });
       console.log('[Translator CS] bilingual toggled to', bilingualEnabled);
       if (bilingualEnabled) {
         await translatePage();
       } else {
+        floatingBtn.updateState({ bilingualEnabled: false, loading: false, error: false });
         injector.clear();
       }
     }
 
-    let isTranslating = false;
     async function translatePage() {
       if (isTranslating) return;
       isTranslating = true;
-      // Reset error state, set loading
-      floatingBtn.updateState({ bilingualEnabled, loading: true, error: false });
+      floatingBtn.updateState({ bilingualEnabled: true, loading: true, error: false });
       try {
         const targets = injector.getTargets();
-        // Inject placeholders for all targets immediately
         const placeholders = targets.map(el => injector.injectPlaceholder(el));
 
         let successCount = 0;
@@ -92,7 +107,6 @@ export default defineContentScript({
               }
               successCount++;
             } else {
-              // Remove placeholder and clear marker on original element
               placeholders[i].remove();
               el.removeAttribute('data-xt-id');
             }
@@ -100,6 +114,9 @@ export default defineContentScript({
         );
 
         const allFailed = targets.length > 0 && successCount === 0;
+        if (allFailed) {
+          bilingualEnabled = false; // revert — nothing was actually translated
+        }
         floatingBtn.updateState({ bilingualEnabled, loading: false, error: allFailed });
       } finally {
         isTranslating = false;
@@ -112,7 +129,6 @@ function sendTranslate(text: string): Promise<TranslateResult> {
   return new Promise(resolve => {
     const msg: TranslateMessage = { type: 'translate', text };
     chrome.runtime.sendMessage(msg, (result: TranslateResult) => {
-      // Must read lastError to prevent Chrome from logging it as an uncaught error
       const err = chrome.runtime.lastError;
       if (err) {
         resolve({ ok: false, error: err.message ?? 'Extension connection error' });
