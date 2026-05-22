@@ -68,4 +68,28 @@ describe('BilingualInjector', () => {
     expect(document.querySelectorAll('.xt-translation')).toHaveLength(2);
     expect(document.querySelectorAll('[data-xt-id]')).toHaveLength(2);
   });
+
+  it('injectPlaceholder inserts a node with "…" and opacity 0.4', () => {
+    document.body.innerHTML = '<p>Hello</p>';
+    const injector = new BilingualInjector(document.body);
+    const p = document.querySelector('p')!;
+    const node = injector.injectPlaceholder(p);
+
+    expect(node.textContent).toBe('…');
+    expect(node.style.opacity).toBe('0.4');
+    expect(node.classList.contains('xt-translation')).toBe(true);
+    expect(p.getAttribute('data-xt-id')).not.toBeNull();
+  });
+
+  it('fulfill sets translation text and removes opacity', () => {
+    document.body.innerHTML = '<p>Hello</p>';
+    const injector = new BilingualInjector(document.body);
+    const p = document.querySelector('p')!;
+    const node = injector.injectPlaceholder(p);
+
+    injector.fulfill(node, '你好');
+
+    expect(node.textContent).toBe('你好');
+    expect(node.style.opacity).toBe('');
+  });
 });

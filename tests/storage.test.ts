@@ -21,7 +21,6 @@ describe('getSettings', () => {
     expect(settings.model).toBe('gpt-5.5');
     expect(settings.targetLang).toBe('繁體中文');
     expect(settings.bilingualEnabled).toBe(false);
-    expect(settings.selectionEnabled).toBe(true);
   });
 
   it('merges stored values over defaults', async () => {

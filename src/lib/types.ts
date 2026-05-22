@@ -4,7 +4,6 @@ export interface ExtensionSettings {
   model: string;
   targetLang: string;
   bilingualEnabled: boolean;
-  selectionEnabled: boolean;
 }
 
 export const DEFAULT_SETTINGS: ExtensionSettings = {
@@ -13,7 +12,6 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   model: 'gpt-5.5',
   targetLang: '繁體中文',
   bilingualEnabled: false,
-  selectionEnabled: true,
 };
 
 // Content script → Background
@@ -30,3 +28,15 @@ export interface ToggleTranslationMessage {
 export type TranslateResult =
   | { ok: true; translation: string }
   | { ok: false; error: string };
+
+export interface SiteRules {
+  domains: Record<string, 'always' | 'never'>;
+  skipUrls: string[]; // origin+pathname keys
+}
+
+export const DEFAULT_SITE_RULES: SiteRules = { domains: {}, skipUrls: [] };
+
+export interface ApplySiteRuleMessage {
+  type: 'apply-site-rule';
+  behavior: 'always' | 'never' | 'skip' | 'default';
+}

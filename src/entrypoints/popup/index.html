@@ -5,20 +5,75 @@
   <title>Translator</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; width: 240px; padding: 16px; }
-    h2 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
-    .hint { font-size: 13px; color: #666; margin-bottom: 14px; line-height: 1.5; }
-    a { display: block; text-align: center; padding: 9px; background: #1a73e8; color: #fff;
-        border-radius: 6px; font-size: 13px; text-decoration: none; }
-    a:hover { background: #1558b0; }
-    .server { font-size: 11px; color: #999; margin-top: 10px; word-break: break-all; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      width: 260px;
+      padding: 16px;
+    }
+    h2 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+    .domain-label {
+      font-size: 11px;
+      color: #888;
+      margin-bottom: 14px;
+      word-break: break-all;
+    }
+    .rule-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .rule-btn {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      background: #fff;
+      font-size: 13px;
+      cursor: pointer;
+      text-align: left;
+      transition: background 0.1s, border-color 0.1s;
+    }
+    .rule-btn:hover { background: #f5f5f5; }
+    .rule-btn.active {
+      background: #1a73e8;
+      border-color: #1a73e8;
+      color: #fff;
+    }
+    .status-text {
+      font-size: 12px;
+      color: #555;
+      margin-bottom: 14px;
+      min-height: 16px;
+    }
+    .divider {
+      border: none;
+      border-top: 1px solid #eee;
+      margin-bottom: 10px;
+    }
+    .footer-link {
+      display: block;
+      text-align: center;
+      font-size: 12px;
+      color: #1a73e8;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .footer-link:hover { text-decoration: underline; }
+    .unavailable {
+      font-size: 13px;
+      color: #888;
+      text-align: center;
+      padding: 20px 0;
+    }
   </style>
 </head>
 <body>
-  <h2>Translator</h2>
-  <p class="hint">使用頁面右下角的浮動按鈕開關翻譯，或按 <kbd>Alt+A</kbd> 切換雙語模式。</p>
-  <a href="#" id="open-options">開啟設定</a>
-  <div class="server" id="server-info"></div>
+  <div id="app">
+    <h2>Translator</h2>
+    <div class="domain-label" id="domain-label"></div>
+    <div id="main-content"></div>
+  </div>
   <script type="module" src="main.ts"></script>
 </body>
 </html>

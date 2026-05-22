@@ -1,15 +1,20 @@
 interface FloatingButtonOptions {
   onToggleBilingual: () => void;
-  onToggleSelection: () => void;
 }
 
 interface ButtonState {
   bilingualEnabled: boolean;
-  selectionEnabled: boolean;
+  loading: boolean;
   error: boolean;
 }
 
 const CSS = `
+  @keyframes xt-dots {
+    0%   { content: '·'; }
+    33%  { content: '··'; }
+    66%  { content: '···'; }
+    100% { content: '·'; }
+  }
   #xt-fab {
     position: fixed;
     bottom: 24px;
@@ -17,14 +22,13 @@ const CSS = `
     z-index: 2147483646;
     display: flex;
     flex-direction: column;
-    align-items: flex-end;
-    gap: 8px;
+    align-items: center;
     user-select: none;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
   .xt-fab-btn {
-    width: 44px;
-    height: 44px;
+    width: 48px;
+    height: 48px;
     border-radius: 50%;
     background: #fff;
     border: 1px solid #e0e0e0;
@@ -33,30 +37,32 @@ const CSS = `
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 20px;
+    font-size: 22px;
     transition: background 0.15s;
   }
   .xt-fab-btn:hover { background: #f5f5f5; }
-  .xt-fab-btn.xt-active { background: #e8f0fe; border-color: #1a73e8; }
-  .xt-fab-btn.xt-error { border-color: #d32f2f; background: #fce8e6; }
-  .xt-menu { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
-  .xt-error-tip {
-    background: #d32f2f;
-    color: #fff;
-    font-size: 11px;
-    padding: 4px 8px;
-    border-radius: 4px;
+  .xt-fab-btn.xt-active { background: #1a73e8; border-color: #1a73e8; }
+  .xt-fab-btn.xt-loading { background: #4285f4; border-color: #4285f4; }
+  .xt-fab-btn.xt-error { background: #d32f2f; border-color: #d32f2f; }
+  .xt-fab-label {
+    font-size: 10px;
+    color: #555;
+    margin-top: 4px;
+    text-align: center;
     white-space: nowrap;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-    max-width: 180px;
-    text-align: right;
-    line-height: 1.4;
+  }
+  .xt-fab-label.xt-label-active { color: #1a73e8; }
+  .xt-fab-label.xt-label-loading { color: #4285f4; }
+  .xt-fab-label.xt-label-error { color: #d32f2f; }
+  .xt-dots-anim::after {
+    content: '·';
+    animation: xt-dots 1.2s steps(1) infinite;
   }
 `;
 
 export class FloatingButton {
   private host: HTMLDivElement | null = null;
-  private state: ButtonState = { bilingualEnabled: false, selectionEnabled: true, error: false };
+  private state: ButtonState = { bilingualEnabled: false, loading: false, error: false };
 
   constructor(private options: FloatingButtonOptions) {}
 
@@ -85,25 +91,40 @@ export class FloatingButton {
 
   private render(): void {
     if (!this.host) return;
-    const { bilingualEnabled, selectionEnabled, error } = this.state;
+    const { bilingualEnabled, loading, error } = this.state;
+
+    let btnClass = 'xt-fab-btn';
+    let labelClass = 'xt-fab-label';
+    let icon = '💬';
+    let label = '翻譯';
+
+    if (loading) {
+      btnClass += ' xt-loading';
+      labelClass += ' xt-label-loading';
+      icon = '⏳';
+      label = '翻譯中';
+    } else if (error) {
+      btnClass += ' xt-error';
+      labelClass += ' xt-label-error';
+      icon = '⚠️';
+      label = '失敗';
+    } else if (bilingualEnabled) {
+      btnClass += ' xt-active';
+      labelClass += ' xt-label-active';
+      icon = '🔤';
+      label = '已翻譯';
+    }
+
     this.host.innerHTML = `
       <div id="xt-fab">
-        <div class="xt-menu">
-          ${error ? '<div class="xt-error-tip">翻譯失敗<br>請確認 OpenCode 伺服器設定</div>' : ''}
-          <button class="xt-fab-btn ${bilingualEnabled ? 'xt-active' : ''} ${error ? 'xt-error' : ''}"
-                  id="xt-btn-bilingual" title="${error ? '翻譯失敗 - 點此重試' : '雙語翻譯'}">
-            ${error ? '⚠️' : bilingualEnabled ? '🔤' : '💬'}
-          </button>
-          <button class="xt-fab-btn ${selectionEnabled ? 'xt-active' : ''}"
-                  id="xt-btn-selection" title="選取翻譯">
-            ✏️
-          </button>
-        </div>
+        <button class="${btnClass}" id="xt-btn-bilingual"
+                title="${error ? '翻譯失敗 - 點此重試' : loading ? '翻譯中…' : bilingualEnabled ? '已翻譯' : '雙語翻譯'}">
+          ${icon}
+        </button>
+        <div class="${labelClass}${loading ? ' xt-dots-anim' : ''}">${label}</div>
       </div>
     `;
     this.host.querySelector('#xt-btn-bilingual')
       ?.addEventListener('click', this.options.onToggleBilingual);
-    this.host.querySelector('#xt-btn-selection')
-      ?.addEventListener('click', this.options.onToggleSelection);
   }
 }

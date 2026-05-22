@@ -1,8 +1,12 @@
 import { BilingualInjector } from '../lib/bilingual-injector';
-import { SelectionPopup } from '../lib/selection-popup';
 import { FloatingButton } from '../lib/floating-button';
-import { getSettings, saveSettings } from '../lib/storage';
-import type { TranslateMessage, TranslateResult, ToggleTranslationMessage } from '../lib/types';
+import { getSettings, saveSettings, getSiteRules } from '../lib/storage';
+import type {
+  TranslateMessage,
+  TranslateResult,
+  ToggleTranslationMessage,
+  ApplySiteRuleMessage,
+} from '../lib/types';
 
 export default defineContentScript({
   matches: ['<all_urls>'],
@@ -12,56 +16,49 @@ export default defineContentScript({
     console.log('[Translator CS] Content script started on', location.href);
     const settings = await getSettings();
     let bilingualEnabled = settings.bilingualEnabled;
-    let selectionEnabled = settings.selectionEnabled;
+
+    // Check site rules before mounting anything
+    const siteRules = await getSiteRules();
+    const domain = location.hostname;
+    const pageKey = location.origin + location.pathname;
+    const domainBehavior = siteRules.domains[domain];
+    const isSkipped = siteRules.skipUrls.includes(pageKey);
+
+    if (domainBehavior === 'never') {
+      // Don't mount anything, exit silently
+      return;
+    }
 
     const injector = new BilingualInjector(document.body);
 
-    const selectionPopup = new SelectionPopup(async (text, requestId) => {
-      const result = await sendTranslate(text);
-      if (result.ok) {
-        selectionPopup.setTranslation(result.translation, requestId);
-      } else {
-        selectionPopup.setError(requestId);
-      }
-    });
-    selectionPopup.mount();
-
     const floatingBtn = new FloatingButton({
       onToggleBilingual: () => { toggleBilingual().catch(() => {}); },
-      onToggleSelection: () => { toggleSelection().catch(() => {}); },
     });
     floatingBtn.mount();
-    floatingBtn.updateState({ bilingualEnabled, selectionEnabled, error: false });
+    floatingBtn.updateState({ bilingualEnabled, loading: false, error: false });
 
-    document.addEventListener('mouseup', () => {
-      if (!selectionEnabled) return;
-      const sel = window.getSelection();
-      const text = sel?.toString().trim() ?? '';
-      if (text.length < 2 || !sel || sel.rangeCount === 0) {
-        selectionPopup.hide();
-        return;
+    // Auto-translate if domain is set to 'always'
+    if (domainBehavior === 'always' && !isSkipped && !bilingualEnabled) {
+      toggleBilingual().catch(() => {});
+    }
+
+    chrome.runtime.onMessage.addListener((message: ToggleTranslationMessage | ApplySiteRuleMessage) => {
+      if (message.type === 'toggle-translation') {
+        toggleBilingual().catch(() => {});
+      } else if (message.type === 'apply-site-rule') {
+        const msg = message as ApplySiteRuleMessage;
+        if (msg.behavior === 'never') {
+          floatingBtn.unmount();
+        } else if (msg.behavior === 'always') {
+          if (!bilingualEnabled) toggleBilingual().catch(() => {});
+        }
       }
-      const rect = sel.getRangeAt(0).getBoundingClientRect();
-      selectionPopup.show(text, { x: rect.left + window.scrollX, y: rect.bottom + window.scrollY });
-    });
-
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') selectionPopup.hide();
-    });
-
-    document.addEventListener('mousedown', (e) => {
-      const popup = document.getElementById('xt-selection-popup');
-      if (popup && !popup.contains(e.target as Node)) selectionPopup.hide();
-    });
-
-    chrome.runtime.onMessage.addListener((message: ToggleTranslationMessage) => {
-      if (message.type === 'toggle-translation') toggleBilingual().catch(() => {});
     });
 
     async function toggleBilingual() {
       bilingualEnabled = !bilingualEnabled;
       await saveSettings({ bilingualEnabled });
-      floatingBtn.updateState({ bilingualEnabled, selectionEnabled, error: false });
+      floatingBtn.updateState({ bilingualEnabled, loading: false, error: false });
       console.log('[Translator CS] bilingual toggled to', bilingualEnabled);
       if (bilingualEnabled) {
         await translatePage();
@@ -70,34 +67,36 @@ export default defineContentScript({
       }
     }
 
-    async function toggleSelection() {
-      selectionEnabled = !selectionEnabled;
-      await saveSettings({ selectionEnabled });
-      floatingBtn.updateState({ bilingualEnabled, selectionEnabled, error: false });
-    }
-
     let isTranslating = false;
     async function translatePage() {
       if (isTranslating) return;
       isTranslating = true;
-      floatingBtn.updateState({ bilingualEnabled, selectionEnabled, error: false });
+      // Reset error state, set loading
+      floatingBtn.updateState({ bilingualEnabled, loading: true, error: false });
       try {
         const targets = injector.getTargets();
+        // Inject placeholders for all targets immediately
+        const placeholders = targets.map(el => injector.injectPlaceholder(el));
+
         let successCount = 0;
         await Promise.all(
-          targets.map(async (el) => {
+          targets.map(async (el, i) => {
             const text = el.textContent?.trim() ?? '';
             if (!text) return;
             const result = await sendTranslate(text);
             if (result.ok) {
-              injector.inject(el, result.translation);
+              injector.fulfill(placeholders[i], result.translation);
               successCount++;
+            } else {
+              // Remove placeholder and clear marker on original element
+              placeholders[i].remove();
+              el.removeAttribute('data-xt-id');
             }
           }),
         );
-        if (targets.length > 0 && successCount === 0) {
-          floatingBtn.updateState({ bilingualEnabled, selectionEnabled, error: true });
-        }
+
+        const allFailed = targets.length > 0 && successCount === 0;
+        floatingBtn.updateState({ bilingualEnabled, loading: false, error: allFailed });
       } finally {
         isTranslating = false;
       }

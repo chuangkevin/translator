@@ -18,11 +18,12 @@ export class BilingualInjector {
     );
   }
 
-  inject(el: HTMLElement, translation: string): void {
+  injectPlaceholder(el: HTMLElement): HTMLElement {
     el.setAttribute('data-xt-id', String(++this.idCounter));
     const node = this.ownerDoc.createElement(el.tagName.toLowerCase());
     node.className = 'xt-translation';
-    node.textContent = translation;
+    node.textContent = '…';
+    node.style.opacity = '0.4';
     const win = this.ownerDoc.defaultView;
     if (win) {
       const cs = win.getComputedStyle(el);
@@ -35,9 +36,21 @@ export class BilingualInjector {
         `color:${cs.color}`,
         `margin-top:${cs.marginTop}`,
         `margin-bottom:${cs.marginBottom}`,
+        `opacity:0.4`,
       ].join(';');
     }
     el.insertAdjacentElement('afterend', node);
+    return node;
+  }
+
+  fulfill(node: HTMLElement, translation: string): void {
+    node.textContent = translation;
+    node.style.opacity = '';
+  }
+
+  inject(el: HTMLElement, translation: string): void {
+    const node = this.injectPlaceholder(el);
+    this.fulfill(node, translation);
   }
 
   clear(): void {
