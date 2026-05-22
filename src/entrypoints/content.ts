@@ -27,8 +27,8 @@ export default defineContentScript({
     selectionPopup.mount();
 
     const floatingBtn = new FloatingButton({
-      onToggleBilingual: () => toggleBilingual(),
-      onToggleSelection: () => toggleSelection(),
+      onToggleBilingual: () => { toggleBilingual().catch(() => {}); },
+      onToggleSelection: () => { toggleSelection().catch(() => {}); },
     });
     floatingBtn.mount();
     floatingBtn.updateState({ bilingualEnabled, selectionEnabled, error: false });
@@ -37,12 +37,11 @@ export default defineContentScript({
       if (!selectionEnabled) return;
       const sel = window.getSelection();
       const text = sel?.toString().trim() ?? '';
-      if (text.length < 2) {
+      if (text.length < 2 || !sel || sel.rangeCount === 0) {
         selectionPopup.hide();
         return;
       }
-      const range = sel!.getRangeAt(0);
-      const rect = range.getBoundingClientRect();
+      const rect = sel.getRangeAt(0).getBoundingClientRect();
       selectionPopup.show(text, { x: rect.left + window.scrollX, y: rect.bottom + window.scrollY });
     });
 
@@ -56,7 +55,7 @@ export default defineContentScript({
     });
 
     chrome.runtime.onMessage.addListener((message: ToggleTranslationMessage) => {
-      if (message.type === 'toggle-translation') toggleBilingual();
+      if (message.type === 'toggle-translation') toggleBilingual().catch(() => {});
     });
 
     async function toggleBilingual() {
