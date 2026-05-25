@@ -2,11 +2,42 @@ import { OpenCodeClient } from '../lib/opencode-client';
 import { Translator } from '../lib/translator';
 import { getSettings } from '../lib/storage';
 import { TranslationCache, cacheKey } from '../lib/translation-cache';
-import type { TranslateMessage, TranslateResult, TranslateBatchMessage, TranslateBatchResult } from '../lib/types';
+import type { ExtensionSettings, TranslateMessage, TranslateResult, TranslateBatchMessage, TranslateBatchResult } from '../lib/types';
+
+const CACHE_STORAGE_KEY = 'xt_cache';
 
 const cache = new TranslationCache();
 let cacheTargetLang = '';
 let cacheModel = '';
+let cacheReady = false;
+let saveDebounce: ReturnType<typeof setTimeout> | null = null;
+
+async function ensureCacheReady(settings: ExtensionSettings): Promise<void> {
+  if (cacheReady) return;
+  cacheTargetLang = settings.targetLang;
+  cacheModel = settings.model;
+  cacheReady = true;
+  try {
+    const data = await chrome.storage.local.get(CACHE_STORAGE_KEY);
+    const saved = data[CACHE_STORAGE_KEY] as { entries?: Record<string, string>; targetLang?: string; model?: string } | undefined;
+    if (saved?.targetLang === settings.targetLang && saved?.model === settings.model && saved.entries) {
+      cache.loadEntries(saved.entries);
+      console.log('[Translator BG] loaded', cache.size, 'cache entries from storage');
+    }
+  } catch {}
+}
+
+function scheduleSave(): void {
+  if (saveDebounce) clearTimeout(saveDebounce);
+  saveDebounce = setTimeout(async () => {
+    saveDebounce = null;
+    try {
+      await chrome.storage.local.set({
+        [CACHE_STORAGE_KEY]: { entries: cache.toObject(), targetLang: cacheTargetLang, model: cacheModel },
+      });
+    } catch {}
+  }, 1000);
+}
 
 // Global concurrency limit — prevents flooding the OpenCode server when many elements
 // are translated simultaneously. Each service worker activation starts fresh.
@@ -83,9 +114,9 @@ export default defineBackground(() => {
           const settings = await getSettings();
           if (settings.targetLang !== cacheTargetLang || settings.model !== cacheModel) {
             cache.clear();
-            cacheTargetLang = settings.targetLang;
-            cacheModel = settings.model;
+            cacheReady = false;
           }
+          await ensureCacheReady(settings);
           // Separate cached from uncached texts
           const keys = message.texts.map(t => cacheKey(settings.targetLang, t));
           const results: (string | null)[] = message.texts.map((_, i) => cache.get(keys[i]) ?? null);
@@ -102,12 +133,11 @@ export default defineBackground(() => {
                 targetLang: settings.targetLang,
               });
               const translator = new Translator(client);
-              // Retry whole batch via Translator.translate on a combined prompt
               const batchResult = await translator.translateBatch(uncachedTexts);
               batchResult.forEach((t, bi) => {
                 const origIdx = uncachedIdxs[bi];
                 results[origIdx] = t;
-                if (t) cache.set(keys[origIdx], t);
+                if (t) { cache.set(keys[origIdx], t); scheduleSave(); }
               });
             } finally {
               releaseSlot();
@@ -133,9 +163,9 @@ export default defineBackground(() => {
           const settings = await getSettings();
           if (settings.targetLang !== cacheTargetLang || settings.model !== cacheModel) {
             cache.clear();
-            cacheTargetLang = settings.targetLang;
-            cacheModel = settings.model;
+            cacheReady = false;
           }
+          await ensureCacheReady(settings);
           const key = cacheKey(settings.targetLang, message.text);
           const cached = cache.get(key);
           if (cached !== undefined) {
@@ -166,6 +196,7 @@ export default defineBackground(() => {
           } else {
             console.log('[Translator BG] translate ok | result:', result.translation.slice(0, 40));
             cache.set(key, result.translation);
+            scheduleSave();
           }
           sendResponse(result);
         } catch (e) {

@@ -27,6 +27,16 @@ export class TranslationCache {
   get size(): number {
     return this.map.size;
   }
+
+  toObject(): Record<string, string> {
+    return Object.fromEntries(this.map);
+  }
+
+  loadEntries(entries: Record<string, string>): void {
+    for (const [k, v] of Object.entries(entries)) {
+      this.set(k, v);
+    }
+  }
 }
 
 export function cacheKey(targetLang: string, text: string): string {
