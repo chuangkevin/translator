@@ -1,4 +1,5 @@
 import { OpenCodeClient, OpenCodeError } from './opencode-client';
+export type { OpenCodeError };
 import type { TranslateResult } from './types';
 
 interface TranslatorOptions {
@@ -49,6 +50,23 @@ export class Translator {
     this.semaphore = new Semaphore(options.maxConcurrent ?? 5);
     this.retries = options.retries ?? 4;
     this.retryDelayMs = options.retryDelayMs ?? 1000;
+  }
+
+  async translateBatch(texts: string[]): Promise<(string | null)[]> {
+    await this.semaphore.acquire();
+    try {
+      for (let attempt = 0; attempt < this.retries; attempt++) {
+        if (attempt > 0) await sleep(this.retryDelayMs * Math.pow(2, attempt - 1));
+        try {
+          return await this.client.translateBatch(texts);
+        } catch (err) {
+          if (err instanceof OpenCodeError && err.status && err.status < 500) break;
+        }
+      }
+      return texts.map(() => null);
+    } finally {
+      this.semaphore.release();
+    }
   }
 
   async translate(text: string): Promise<TranslateResult> {

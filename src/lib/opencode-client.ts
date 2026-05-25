@@ -67,7 +67,7 @@ export class OpenCodeClient {
     this.systemPrompt = `你是翻譯助手，無論原文是何種語言（英文、日文、廣東話、簡體中文、葡萄牙文等），一律翻譯成${config.targetLang}，只輸出譯文，不加任何說明。`;
   }
 
-  async translate(text: string): Promise<string> {
+  private async call(text: string, system: string): Promise<string> {
     const baseUrl = this.config.serverUrl.replace(/\/$/, '');
 
     // 1. Create session
@@ -97,7 +97,7 @@ export class OpenCodeClient {
           body: JSON.stringify({
             agent: 'general',
             model: this.messageModel,
-            system: this.systemPrompt,
+            system,
             parts: [{ type: 'text', text }],
           }),
         }),
@@ -122,5 +122,26 @@ export class OpenCodeClient {
         headers: { 'Content-Type': 'application/json' },
       }).catch(() => undefined);
     }
+  }
+
+  async translate(text: string): Promise<string> {
+    return this.call(text, this.systemPrompt);
+  }
+
+  /** Translate up to N texts in one session. Returns an array of the same length;
+   *  any item that could not be parsed returns null. */
+  async translateBatch(texts: string[]): Promise<(string | null)[]> {
+    const batchPrompt = `你是翻譯助手。把以下 JSON 字串陣列的每個字串翻譯成${this.config.targetLang}。只輸出格式相同的 JSON 字串陣列，不加任何說明。`;
+    const raw = await this.call(JSON.stringify(texts), batchPrompt);
+    // Extract the JSON array even if the AI adds surrounding text
+    const start = raw.indexOf('[');
+    const end = raw.lastIndexOf(']');
+    if (start === -1 || end <= start) throw new OpenCodeError('Batch: no JSON array in response');
+    const parsed: unknown = JSON.parse(raw.slice(start, end + 1));
+    if (!Array.isArray(parsed)) throw new OpenCodeError('Batch: response is not an array');
+    return texts.map((_, i) => {
+      const v = (parsed as unknown[])[i];
+      return typeof v === 'string' && v.trim() ? v.trim() : null;
+    });
   }
 }

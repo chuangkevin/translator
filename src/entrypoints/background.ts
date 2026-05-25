@@ -2,7 +2,7 @@ import { OpenCodeClient } from '../lib/opencode-client';
 import { Translator } from '../lib/translator';
 import { getSettings } from '../lib/storage';
 import { TranslationCache, cacheKey } from '../lib/translation-cache';
-import type { TranslateMessage, TranslateResult } from '../lib/types';
+import type { TranslateMessage, TranslateResult, TranslateBatchMessage, TranslateBatchResult } from '../lib/types';
 
 const cache = new TranslationCache();
 let cacheTargetLang = '';
@@ -74,7 +74,56 @@ export default defineBackground(() => {
     }
   });
 
-  // Translation requests from content scripts
+  // Batch translation requests from content scripts
+  chrome.runtime.onMessage.addListener(
+    (message: TranslateBatchMessage, _sender, sendResponse: (r: TranslateBatchResult) => void) => {
+      if (message.type !== 'translate-batch') return false;
+      (async () => {
+        try {
+          const settings = await getSettings();
+          if (settings.targetLang !== cacheTargetLang || settings.model !== cacheModel) {
+            cache.clear();
+            cacheTargetLang = settings.targetLang;
+            cacheModel = settings.model;
+          }
+          // Separate cached from uncached texts
+          const keys = message.texts.map(t => cacheKey(settings.targetLang, t));
+          const results: (string | null)[] = message.texts.map((_, i) => cache.get(keys[i]) ?? null);
+          const uncachedIdxs = results.map((r, i) => r === null ? i : -1).filter(i => i >= 0);
+
+          if (uncachedIdxs.length > 0) {
+            const uncachedTexts = uncachedIdxs.map(i => message.texts[i]);
+            await acquireSlot();
+            try {
+              const client = new OpenCodeClient({
+                serverUrl: settings.serverUrl,
+                provider: settings.provider,
+                model: settings.model,
+                targetLang: settings.targetLang,
+              });
+              const translator = new Translator(client);
+              // Retry whole batch via Translator.translate on a combined prompt
+              const batchResult = await translator.translateBatch(uncachedTexts);
+              batchResult.forEach((t, bi) => {
+                const origIdx = uncachedIdxs[bi];
+                results[origIdx] = t;
+                if (t) cache.set(keys[origIdx], t);
+              });
+            } finally {
+              releaseSlot();
+            }
+          }
+          sendResponse({ ok: true, translations: results });
+        } catch (e) {
+          console.warn('[Translator BG] batch error:', e);
+          sendResponse({ ok: false, error: String(e) });
+        }
+      })();
+      return true;
+    },
+  );
+
+  // Single translation requests from content scripts
   chrome.runtime.onMessage.addListener(
     (message: TranslateMessage, _sender, sendResponse: (result: TranslateResult) => void) => {
       if (message.type !== 'translate') return false;

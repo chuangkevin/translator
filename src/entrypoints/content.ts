@@ -4,9 +4,13 @@ import { getSiteRules } from '../lib/storage';
 import type {
   TranslateMessage,
   TranslateResult,
+  TranslateBatchMessage,
+  TranslateBatchResult,
   ToggleTranslationMessage,
   ApplySiteRuleMessage,
 } from '../lib/types';
+
+const BATCH_SIZE = 5;
 
 // Characters found only in Traditional Chinese (distinct Unicode code points from their SC counterparts).
 // Detecting any of these in body text is a strong TC signal.
@@ -175,24 +179,44 @@ export default defineContentScript({
       try {
         const targets = injector.getTargets();
         let successCount = 0;
+
+        // Group elements into batches: one API call per batch ≈ BATCH_SIZE× faster.
+        const batches: HTMLElement[][] = [];
+        for (let i = 0; i < targets.length; i += BATCH_SIZE) {
+          batches.push(targets.slice(i, i + BATCH_SIZE));
+        }
+
         await Promise.all(
-          targets.map(async el => {
-            const text = el.textContent?.trim() ?? '';
-            if (!text) return;
-            const placeholder = injector.injectPlaceholder(el);
-            const result = await sendTranslate(text);
+          batches.map(async batch => {
+            const texts = batch.map(el => el.textContent?.trim() ?? '');
+            const placeholders = batch.map((el, i) =>
+              texts[i] ? injector.injectPlaceholder(el) : null,
+            );
+            const result = await sendTranslateBatch(texts);
             if (result.ok) {
-              if (isSimplifiedChinese(text)) {
-                placeholder.remove();
-                el.removeAttribute('data-xt-id');
-                injector.replaceSimplified(el, result.translation);
-              } else {
-                injector.fulfill(placeholder, result.translation);
-              }
-              successCount++;
+              result.translations.forEach((translation, i) => {
+                const el = batch[i];
+                const ph = placeholders[i];
+                if (!texts[i] || !ph) return;
+                if (!translation) {
+                  ph.remove();
+                  el.removeAttribute('data-xt-id');
+                  return;
+                }
+                if (isSimplifiedChinese(texts[i])) {
+                  ph.remove();
+                  el.removeAttribute('data-xt-id');
+                  injector.replaceSimplified(el, translation);
+                } else {
+                  injector.fulfill(ph, translation);
+                }
+                successCount++;
+              });
             } else {
-              placeholder.remove();
-              el.removeAttribute('data-xt-id');
+              batch.forEach((el, i) => {
+                placeholders[i]?.remove();
+                el.removeAttribute('data-xt-id');
+              });
             }
           }),
         );
@@ -201,7 +225,7 @@ export default defineContentScript({
         if (allFailed) {
           bilingualEnabled = false;
           stopObserver();
-          injector.clear(); // safety net: remove any residual placeholders
+          injector.clear();
         }
         floatingBtn.updateState({ bilingualEnabled, loading: false, error: allFailed });
       } finally {
@@ -215,6 +239,20 @@ function sendTranslate(text: string): Promise<TranslateResult> {
   return new Promise(resolve => {
     const msg: TranslateMessage = { type: 'translate', text };
     chrome.runtime.sendMessage(msg, (result: TranslateResult) => {
+      const err = chrome.runtime.lastError;
+      if (err) {
+        resolve({ ok: false, error: err.message ?? 'Extension connection error' });
+        return;
+      }
+      resolve(result ?? { ok: false, error: 'No response from background' });
+    });
+  });
+}
+
+function sendTranslateBatch(texts: string[]): Promise<TranslateBatchResult> {
+  return new Promise(resolve => {
+    const msg: TranslateBatchMessage = { type: 'translate-batch', texts };
+    chrome.runtime.sendMessage(msg, (result: TranslateBatchResult) => {
       const err = chrome.runtime.lastError;
       if (err) {
         resolve({ ok: false, error: err.message ?? 'Extension connection error' });

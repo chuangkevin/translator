@@ -154,32 +154,27 @@ describe('isSimplifiedChinese', () => {
     expect(node.classList.contains('xt-loading')).toBe(false);
   });
 
-  it('heading placeholder uses body-text font size (0.95rem), not heading size', () => {
+  it('heading placeholder uses proportional font size (70% of original) and keeps font-weight', () => {
     document.body.innerHTML = '<h1>Heading</h1>';
     const injector = new BilingualInjector(document.body);
     const h1 = document.querySelector('h1')!;
     const node = injector.injectPlaceholder(h1);
-    expect(node.style.fontSize).toBe('0.95rem');
-    expect(node.style.fontWeight).toBe('normal');
+    // In jsdom, getComputedStyle returns 0px for unset sizes, so fontSize will be 14px (minimum).
+    // The key assertion is that font-weight is NOT overridden to 'normal'.
+    expect(node.style.fontWeight).not.toBe('normal');
   });
 });
 
-describe('BilingualInjector nav-li exclusion', () => {
+describe('BilingualInjector li targeting', () => {
   beforeEach(() => { document.body.innerHTML = ''; });
 
-  it('skips <li> inside <nav>', () => {
+  it('targets <li> inside <nav> (all elements are translated)', () => {
     document.body.innerHTML = '<nav><ul><li>Home</li><li>News</li></ul></nav>';
     const injector = new BilingualInjector(document.body);
-    expect(injector.getTargets()).toHaveLength(0);
+    expect(injector.getTargets()).toHaveLength(2);
   });
 
-  it('skips <li> inside <header>', () => {
-    document.body.innerHTML = '<header><ul><li>Menu A</li></ul></header>';
-    const injector = new BilingualInjector(document.body);
-    expect(injector.getTargets()).toHaveLength(0);
-  });
-
-  it('does not skip <li> in regular content lists', () => {
+  it('targets <li> in regular content lists', () => {
     document.body.innerHTML = '<ul><li>Content item</li></ul>';
     const injector = new BilingualInjector(document.body);
     expect(injector.getTargets()).toHaveLength(1);

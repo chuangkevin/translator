@@ -45,9 +45,6 @@ export class BilingualInjector {
   }
 
   private isTarget(el: HTMLElement): boolean {
-    // Skip <li> inside nav/header — fixed-height navigation bars clip extra content,
-    // and nav link labels have low translation value compared to article content.
-    if (el.tagName === 'LI' && !!el.closest('nav, header, [role="navigation"]')) return false;
     return (
       el.matches(SELECTOR) &&
       !el.hasAttribute('data-xt-id') &&
@@ -100,10 +97,15 @@ export class BilingualInjector {
         });
         el.appendChild(node);
       } else {
+        // Headings keep their font-weight and family, but are scaled down to ~70%
+        // so the translation is visually subordinate without looking like body text.
+        const fontSize = isHeading
+          ? `${Math.max(Math.round(parseFloat(cs.fontSize) * 0.7), 14)}px`
+          : cs.fontSize;
         applyStyles(node, {
           fontFamily: cs.fontFamily,
-          fontSize: isHeading ? '0.95rem' : cs.fontSize,
-          fontWeight: isHeading ? 'normal' : cs.fontWeight,
+          fontSize,
+          fontWeight: cs.fontWeight,
           fontStyle: cs.fontStyle,
           lineHeight: cs.lineHeight,
           color: cs.color,

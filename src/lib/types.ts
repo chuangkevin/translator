@@ -20,6 +20,15 @@ export interface TranslateMessage {
   text: string;
 }
 
+export interface TranslateBatchMessage {
+  type: 'translate-batch';
+  texts: string[];
+}
+
+export type TranslateBatchResult =
+  | { ok: true; translations: (string | null)[] }  // null = failed for that item
+  | { ok: false; error: string };
+
 // Background → Content script (keyboard command relay)
 export interface ToggleTranslationMessage {
   type: 'toggle-translation';
