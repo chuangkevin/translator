@@ -164,6 +164,28 @@ describe('isSimplifiedChinese', () => {
   });
 });
 
+describe('BilingualInjector nav-li exclusion', () => {
+  beforeEach(() => { document.body.innerHTML = ''; });
+
+  it('skips <li> inside <nav>', () => {
+    document.body.innerHTML = '<nav><ul><li>Home</li><li>News</li></ul></nav>';
+    const injector = new BilingualInjector(document.body);
+    expect(injector.getTargets()).toHaveLength(0);
+  });
+
+  it('skips <li> inside <header>', () => {
+    document.body.innerHTML = '<header><ul><li>Menu A</li></ul></header>';
+    const injector = new BilingualInjector(document.body);
+    expect(injector.getTargets()).toHaveLength(0);
+  });
+
+  it('does not skip <li> in regular content lists', () => {
+    document.body.innerHTML = '<ul><li>Content item</li></ul>';
+    const injector = new BilingualInjector(document.body);
+    expect(injector.getTargets()).toHaveLength(1);
+  });
+});
+
 describe('BilingualInjector td/li injection', () => {
   beforeEach(() => {
     document.body.innerHTML = '';

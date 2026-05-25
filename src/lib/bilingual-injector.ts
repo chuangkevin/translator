@@ -45,6 +45,9 @@ export class BilingualInjector {
   }
 
   private isTarget(el: HTMLElement): boolean {
+    // Skip <li> inside nav/header — fixed-height navigation bars clip extra content,
+    // and nav link labels have low translation value compared to article content.
+    if (el.tagName === 'LI' && !!el.closest('nav, header, [role="navigation"]')) return false;
     return (
       el.matches(SELECTOR) &&
       !el.hasAttribute('data-xt-id') &&
