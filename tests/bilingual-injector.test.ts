@@ -138,3 +138,63 @@ describe('isSimplifiedChinese', () => {
     expect(node.style.opacity).toBe('');
   });
 });
+
+describe('BilingualInjector td/li injection', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('injects translation inside <td> to preserve table column count', () => {
+    document.body.innerHTML = '<table><tr><td>Cell A</td><td>Cell B</td></tr></table>';
+    const injector = new BilingualInjector(document.body);
+    const td = document.querySelector('td')!;
+    injector.inject(td, '翻譯A');
+
+    // Must not add extra <td> siblings — column count unchanged
+    const row = document.querySelector('tr')!;
+    expect(row.querySelectorAll('td')).toHaveLength(2);
+    // Translation node should be inside the <td>
+    const transNode = td.querySelector('.xt-translation');
+    expect(transNode).not.toBeNull();
+    expect(transNode!.textContent).toBe('翻譯A');
+  });
+
+  it('injects translation inside <li> to avoid doubling list items', () => {
+    document.body.innerHTML = '<ul><li>Item 1</li><li>Item 2</li></ul>';
+    const injector = new BilingualInjector(document.body);
+    const li = document.querySelector('li')!;
+    injector.inject(li, '項目一');
+
+    // Must not add extra <li> siblings
+    const ul = document.querySelector('ul')!;
+    expect(ul.querySelectorAll('li')).toHaveLength(2);
+    // Translation node should be inside the <li>
+    const transNode = li.querySelector('.xt-translation');
+    expect(transNode).not.toBeNull();
+    expect(transNode!.textContent).toBe('項目一');
+  });
+
+  it('clear removes inner translation nodes from td', () => {
+    document.body.innerHTML = '<table><tr><td>Cell</td></tr></table>';
+    const injector = new BilingualInjector(document.body);
+    const td = document.querySelector('td')!;
+    injector.inject(td, '翻譯');
+    injector.clear();
+
+    expect(document.querySelectorAll('.xt-translation')).toHaveLength(0);
+    expect(td.querySelectorAll('.xt-translation')).toHaveLength(0);
+    const row = document.querySelector('tr')!;
+    expect(row.querySelectorAll('td')).toHaveLength(1);
+  });
+
+  it('injectPlaceholder for <p> inserts sibling (not inner) to preserve block flow', () => {
+    document.body.innerHTML = '<p>Text</p>';
+    const injector = new BilingualInjector(document.body);
+    const p = document.querySelector('p')!;
+    injector.injectPlaceholder(p);
+
+    // Placeholder should be a sibling, not inside the <p>
+    expect(p.querySelector('.xt-translation')).toBeNull();
+    expect(p.nextElementSibling?.classList.contains('xt-translation')).toBe(true);
+  });
+});

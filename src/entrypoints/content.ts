@@ -8,6 +8,12 @@ import type {
   ApplySiteRuleMessage,
 } from '../lib/types';
 
+// Characters found only in Traditional Chinese (distinct Unicode code points from their SC counterparts).
+// Detecting any of these in body text is a strong TC signal.
+const TC_MARKER_RE = /[體語電腦學務請時間問題關係話應該國際傳統現實義務環境識別數據處理認識]/;
+// Hiragana/Katakana ranges — presence means the page is Japanese, not Chinese.
+const JAPANESE_RE = /[぀-ゟ゠-ヿ]/;
+
 function isTraditionalChinesePage(): boolean {
   // YouTube's lang attribute reflects the user's UI language, not the video content language.
   // Sample the video title to detect the actual content language.
@@ -20,14 +26,25 @@ function isTraditionalChinesePage(): boolean {
   }
 
   const lang = document.documentElement.lang.toLowerCase().trim();
+  // Explicit Traditional Chinese → skip translation
   if (lang.startsWith('zh-tw') || lang.startsWith('zh-hk') || lang.startsWith('zh-hant') || lang.startsWith('zh-mo')) {
     return true;
   }
+  // Explicit Simplified Chinese → translate
+  if (lang.startsWith('zh-cn') || lang.startsWith('zh-hans') || lang.startsWith('zh-sg') || lang.startsWith('zh-my')) {
+    return false;
+  }
+  // Non-Chinese language → translate
   if (lang && !lang.startsWith('zh')) return false;
+
   // No lang / generic 'zh': sample body text
   const sample = (document.body?.textContent ?? '').replace(/\s+/g, '').slice(0, 500);
   const cjkCount = (sample.match(/[一-鿿]/g) ?? []).length;
   if (cjkCount < 30) return false;
+
+  // Positive TC signal: TC-exclusive characters present, no Japanese kana → definitely TC
+  if (!JAPANESE_RE.test(sample) && TC_MARKER_RE.test(sample)) return true;
+
   return !isSimplifiedChinese(sample);
 }
 
@@ -184,6 +201,7 @@ export default defineContentScript({
         if (allFailed) {
           bilingualEnabled = false;
           stopObserver();
+          injector.clear(); // safety net: remove any residual placeholders
         }
         floatingBtn.updateState({ bilingualEnabled, loading: false, error: allFailed });
       } finally {

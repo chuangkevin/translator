@@ -50,26 +50,48 @@ export class BilingualInjector {
 
   injectPlaceholder(el: HTMLElement): HTMLElement {
     el.setAttribute('data-xt-id', String(++this.idCounter));
-    const node = this.ownerDoc.createElement(el.tagName.toLowerCase());
+    const tag = el.tagName.toUpperCase();
+    // td/th/li: inserting a sibling element of the same type would corrupt table columns
+    // or add extra list items. Insert a <div> block inside the element instead.
+    const insertInside = tag === 'TD' || tag === 'TH' || tag === 'LI';
+    const node = this.ownerDoc.createElement(insertInside ? 'div' : el.tagName.toLowerCase());
     node.className = 'xt-translation';
     node.textContent = '…';
     node.style.opacity = '0.4';
     const win = this.ownerDoc.defaultView;
     if (win) {
       const cs = win.getComputedStyle(el);
-      node.style.cssText = [
-        `font-family:${cs.fontFamily}`,
-        `font-size:${cs.fontSize}`,
-        `font-weight:${cs.fontWeight}`,
-        `font-style:${cs.fontStyle}`,
-        `line-height:${cs.lineHeight}`,
-        `color:${cs.color}`,
-        `margin-top:${cs.marginTop}`,
-        `margin-bottom:${cs.marginBottom}`,
-        `opacity:0.4`,
-      ].join(';');
+      if (insertInside) {
+        node.style.cssText = [
+          `font-family:${cs.fontFamily}`,
+          `font-size:${cs.fontSize}`,
+          `font-weight:${cs.fontWeight}`,
+          `font-style:${cs.fontStyle}`,
+          `line-height:${cs.lineHeight}`,
+          `color:${cs.color}`,
+          `border-top:1px solid rgba(0,0,0,0.08)`,
+          `margin-top:4px`,
+          `padding-top:4px`,
+          `opacity:0.4`,
+        ].join(';');
+        el.appendChild(node);
+      } else {
+        node.style.cssText = [
+          `font-family:${cs.fontFamily}`,
+          `font-size:${cs.fontSize}`,
+          `font-weight:${cs.fontWeight}`,
+          `font-style:${cs.fontStyle}`,
+          `line-height:${cs.lineHeight}`,
+          `color:${cs.color}`,
+          `margin-top:${cs.marginTop}`,
+          `margin-bottom:${cs.marginBottom}`,
+          `opacity:0.4`,
+        ].join(';');
+        el.insertAdjacentElement('afterend', node);
+      }
+    } else {
+      insertInside ? el.appendChild(node) : el.insertAdjacentElement('afterend', node);
     }
-    el.insertAdjacentElement('afterend', node);
     return node;
   }
 
