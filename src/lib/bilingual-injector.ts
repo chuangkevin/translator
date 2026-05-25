@@ -5,6 +5,12 @@ const SIMPLIFIED_CHARS = new Set(
   '们书爱见说这来时头国动过间经联决达产层将补导电发风够关规号话华环获际量领论没农气钱强亲请区认识属树岁谈体听务系选义应优语员运长针众么',
 );
 
+const STYLE_ID = 'xt-injector-style';
+const INJECTOR_CSS = [
+  '@keyframes xt-pulse{0%,100%{opacity:.2}50%{opacity:.75}}',
+  '.xt-loading{animation:xt-pulse 1.2s ease-in-out infinite}',
+].join('');
+
 export function isSimplifiedChinese(text: string): boolean {
   // Japanese text contains hiragana/katakana — don't misidentify as Chinese
   if (/[぀-ゟ゠-ヿ]/.test(text)) return false;
@@ -14,6 +20,12 @@ export function isSimplifiedChinese(text: string): boolean {
   return false;
 }
 
+function applyStyles(el: HTMLElement, styles: Record<string, string>): void {
+  for (const [prop, val] of Object.entries(styles)) {
+    (el.style as unknown as Record<string, string>)[prop] = val;
+  }
+}
+
 export class BilingualInjector {
   private idCounter = 0;
 
@@ -21,6 +33,15 @@ export class BilingualInjector {
 
   private get ownerDoc(): Document {
     return this.root instanceof Document ? this.root : this.root.ownerDocument;
+  }
+
+  private ensureStyles(): void {
+    const doc = this.ownerDoc;
+    if (doc.getElementById(STYLE_ID)) return;
+    const style = doc.createElement('style');
+    style.id = STYLE_ID;
+    style.textContent = INJECTOR_CSS;
+    (doc.head ?? doc.documentElement).appendChild(style);
   }
 
   private isTarget(el: HTMLElement): boolean {
@@ -49,44 +70,45 @@ export class BilingualInjector {
   }
 
   injectPlaceholder(el: HTMLElement): HTMLElement {
+    this.ensureStyles();
     el.setAttribute('data-xt-id', String(++this.idCounter));
     const tag = el.tagName.toUpperCase();
     // td/th/li: inserting a sibling element of the same type would corrupt table columns
     // or add extra list items. Insert a <div> block inside the element instead.
     const insertInside = tag === 'TD' || tag === 'TH' || tag === 'LI';
+    // h1-h6: use body-text size so the translation doesn't dominate the visual hierarchy.
+    const isHeading = /^H[1-6]$/.test(tag);
     const node = this.ownerDoc.createElement(insertInside ? 'div' : el.tagName.toLowerCase());
-    node.className = 'xt-translation';
+    node.className = 'xt-translation xt-loading';
     node.textContent = '…';
-    node.style.opacity = '0.4';
     const win = this.ownerDoc.defaultView;
     if (win) {
       const cs = win.getComputedStyle(el);
       if (insertInside) {
-        node.style.cssText = [
-          `font-family:${cs.fontFamily}`,
-          `font-size:${cs.fontSize}`,
-          `font-weight:${cs.fontWeight}`,
-          `font-style:${cs.fontStyle}`,
-          `line-height:${cs.lineHeight}`,
-          `color:${cs.color}`,
-          `border-top:1px solid rgba(0,0,0,0.08)`,
-          `margin-top:4px`,
-          `padding-top:4px`,
-          `opacity:0.4`,
-        ].join(';');
+        applyStyles(node, {
+          display: 'block',
+          fontFamily: cs.fontFamily,
+          fontSize: '0.8em',
+          color: cs.color,
+          borderTop: '1px solid rgba(0,0,0,0.08)',
+          marginTop: '4px',
+          paddingTop: '4px',
+          opacity: '0.4',
+        });
         el.appendChild(node);
       } else {
-        node.style.cssText = [
-          `font-family:${cs.fontFamily}`,
-          `font-size:${cs.fontSize}`,
-          `font-weight:${cs.fontWeight}`,
-          `font-style:${cs.fontStyle}`,
-          `line-height:${cs.lineHeight}`,
-          `color:${cs.color}`,
-          `margin-top:${cs.marginTop}`,
-          `margin-bottom:${cs.marginBottom}`,
-          `opacity:0.4`,
-        ].join(';');
+        applyStyles(node, {
+          fontFamily: cs.fontFamily,
+          fontSize: isHeading ? '0.95rem' : cs.fontSize,
+          fontWeight: isHeading ? 'normal' : cs.fontWeight,
+          fontStyle: cs.fontStyle,
+          lineHeight: cs.lineHeight,
+          color: cs.color,
+          marginTop: '4px',
+          marginBottom: cs.marginBottom,
+          maxWidth: '100%',
+          opacity: '0.4',
+        });
         el.insertAdjacentElement('afterend', node);
       }
     } else {
@@ -96,6 +118,7 @@ export class BilingualInjector {
   }
 
   fulfill(node: HTMLElement, translation: string): void {
+    node.classList.remove('xt-loading');
     node.textContent = translation;
     node.style.opacity = '';
   }

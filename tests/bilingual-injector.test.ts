@@ -114,7 +114,7 @@ describe('isSimplifiedChinese', () => {
     expect(isSimplifiedChinese('今日はいい天気ですね')).toBe(false); // contains hiragana
   });
 
-  it('injectPlaceholder inserts a node with "…" and opacity 0.4', () => {
+  it('injectPlaceholder inserts a node with "…" and loading animation class', () => {
     document.body.innerHTML = '<p>Hello</p>';
     const injector = new BilingualInjector(document.body);
     const p = document.querySelector('p')!;
@@ -123,10 +123,25 @@ describe('isSimplifiedChinese', () => {
     expect(node.textContent).toBe('…');
     expect(node.style.opacity).toBe('0.4');
     expect(node.classList.contains('xt-translation')).toBe(true);
+    expect(node.classList.contains('xt-loading')).toBe(true);
     expect(p.getAttribute('data-xt-id')).not.toBeNull();
   });
 
-  it('fulfill sets translation text and removes opacity', () => {
+  it('injectPlaceholder injects a <style> element into the document head', () => {
+    document.body.innerHTML = '<p>Hello</p>';
+    const injector = new BilingualInjector(document.body);
+    injector.injectPlaceholder(document.querySelector('p')!);
+    expect(document.getElementById('xt-injector-style')).not.toBeNull();
+  });
+
+  it('injectPlaceholder does not inject duplicate style elements', () => {
+    document.body.innerHTML = '<p>A</p><p>B</p>';
+    const injector = new BilingualInjector(document.body);
+    for (const el of injector.getTargets()) injector.injectPlaceholder(el);
+    expect(document.querySelectorAll('#xt-injector-style')).toHaveLength(1);
+  });
+
+  it('fulfill removes xt-loading class and opacity', () => {
     document.body.innerHTML = '<p>Hello</p>';
     const injector = new BilingualInjector(document.body);
     const p = document.querySelector('p')!;
@@ -136,6 +151,16 @@ describe('isSimplifiedChinese', () => {
 
     expect(node.textContent).toBe('你好');
     expect(node.style.opacity).toBe('');
+    expect(node.classList.contains('xt-loading')).toBe(false);
+  });
+
+  it('heading placeholder uses body-text font size (0.95rem), not heading size', () => {
+    document.body.innerHTML = '<h1>Heading</h1>';
+    const injector = new BilingualInjector(document.body);
+    const h1 = document.querySelector('h1')!;
+    const node = injector.injectPlaceholder(h1);
+    expect(node.style.fontSize).toBe('0.95rem');
+    expect(node.style.fontWeight).toBe('normal');
   });
 });
 
