@@ -3,7 +3,9 @@ import type { TranslateResult } from './types';
 
 interface TranslatorOptions {
   maxConcurrent?: number;
+  /** Total number of attempts (first try + retries). Default: 4. */
   retries?: number;
+  /** Base delay in ms; actual delay is retryDelayMs * 2^attempt (exponential). Default: 1000. */
   retryDelayMs?: number;
 }
 
@@ -45,8 +47,8 @@ export class Translator {
     options: TranslatorOptions = {},
   ) {
     this.semaphore = new Semaphore(options.maxConcurrent ?? 5);
-    this.retries = options.retries ?? 2;
-    this.retryDelayMs = options.retryDelayMs ?? 500;
+    this.retries = options.retries ?? 4;
+    this.retryDelayMs = options.retryDelayMs ?? 1000;
   }
 
   async translate(text: string): Promise<TranslateResult> {
@@ -54,7 +56,7 @@ export class Translator {
     try {
       let lastError: Error | undefined;
       for (let attempt = 0; attempt < this.retries; attempt++) {
-        if (attempt > 0) await sleep(this.retryDelayMs * attempt);
+        if (attempt > 0) await sleep(this.retryDelayMs * Math.pow(2, attempt - 1));
         try {
           const translation = await this.client.translate(text);
           return { ok: true, translation };

@@ -8,6 +8,22 @@ const cache = new TranslationCache();
 let cacheTargetLang = '';
 let cacheModel = '';
 
+// Global concurrency limit — prevents flooding the OpenCode server when many elements
+// are translated simultaneously. Each service worker activation starts fresh.
+let globalPermits = 5;
+const globalQueue: Array<() => void> = [];
+
+function acquireSlot(): Promise<void> {
+  if (globalPermits > 0) { globalPermits--; return Promise.resolve(); }
+  return new Promise<void>(r => globalQueue.push(r));
+}
+
+function releaseSlot(): void {
+  const next = globalQueue.shift();
+  if (next) next();
+  else globalPermits++;
+}
+
 // Injected into YouTube tabs via chrome.scripting (MAIN world) to bypass CSP.
 // Reads ytInitialPlayerResponse and stores caption URL in dataset attributes
 // so the isolated-world content script can read it.
@@ -79,19 +95,28 @@ export default defineBackground(() => {
             return;
           }
           console.log('[Translator BG] translate request | serverUrl:', settings.serverUrl, '| text:', message.text.slice(0, 40));
-          const client = new OpenCodeClient({
-            serverUrl: settings.serverUrl,
-            provider: settings.provider,
-            model: settings.model,
-            targetLang: settings.targetLang,
-          });
-          const translator = new Translator(client);
-          const result = await translator.translate(message.text);
+          await acquireSlot();
+          let result: TranslateResult;
+          try {
+            const client = new OpenCodeClient({
+              serverUrl: settings.serverUrl,
+              provider: settings.provider,
+              model: settings.model,
+              targetLang: settings.targetLang,
+            });
+            const translator = new Translator(client);
+            result = await translator.translate(message.text);
+          } finally {
+            releaseSlot();
+          }
           if (!result.ok) {
             console.warn('[Translator BG] translate failed:', result.error, '| serverUrl:', settings.serverUrl);
+          } else if (!result.translation) {
+            console.warn('[Translator BG] empty translation, treating as failure');
+            result = { ok: false, error: 'Empty translation result' };
           } else {
-            console.log('[Translator BG] translate ok | result:', result.translation?.slice(0, 40));
-            cache.set(key, result.translation!);
+            console.log('[Translator BG] translate ok | result:', result.translation.slice(0, 40));
+            cache.set(key, result.translation);
           }
           sendResponse(result);
         } catch (e) {

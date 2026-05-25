@@ -86,6 +86,28 @@ describe('OpenCodeClient.translate', () => {
     expect(sessionBody.model).toEqual({ providerID: 'openai', id: 'chatgpt5.5', variant: 'default' });
   });
 
+  it('throws OpenCodeError when server returns empty parts', async () => {
+    mockFetch(
+      { ok: true, body: { id: 'sess-x' } },
+      { ok: true, body: { parts: [] } },
+      { ok: true, body: {} },
+    );
+
+    const client = new OpenCodeClient(CONFIG);
+    await expect(client.translate('Hello')).rejects.toBeInstanceOf(OpenCodeError);
+  });
+
+  it('throws OpenCodeError when all parts are synthetic', async () => {
+    mockFetch(
+      { ok: true, body: { id: 'sess-y' } },
+      { ok: true, body: { parts: [{ type: 'text', text: 'prefix', synthetic: true }] } },
+      { ok: true, body: {} },
+    );
+
+    const client = new OpenCodeClient(CONFIG);
+    await expect(client.translate('Hello')).rejects.toBeInstanceOf(OpenCodeError);
+  });
+
   it('POST /session/{id}/message uses modelID field in model', async () => {
     mockFetch(
       { ok: true, body: { id: 'sess-5' } },

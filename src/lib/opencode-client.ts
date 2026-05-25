@@ -109,10 +109,12 @@ export class OpenCodeClient {
         'send message',
       );
 
-      return (msg.parts ?? [])
+      const translation = (msg.parts ?? [])
         .filter(p => p.type === 'text' && !p.synthetic && typeof p.text === 'string')
         .map(p => p.text!)
         .join('');
+      if (!translation) throw new OpenCodeError('Empty translation result from server');
+      return translation;
     } finally {
       // 3. Delete session (fire-and-forget)
       fetch(`${baseUrl}/session/${encodeURIComponent(sessionId)}`, {
