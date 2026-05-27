@@ -6,6 +6,27 @@ interface ButtonState {
   bilingualEnabled: boolean;
   loading: boolean;
   error: boolean;
+  /** Raw failure reason from the background; surfaced to the user when error is true. */
+  errorMessage?: string;
+}
+
+/** Turn a raw OpenCode/transport error into a short, truthful Chinese reason for the FAB label.
+ *  A 5xx from the self-hosted OpenCode server almost always means the configured model is
+ *  unavailable (e.g. renamed/removed), so we say so instead of showing a bare status code. */
+function errorReason(msg: string): string {
+  if (/timed out|timeout/i.test(msg)) return '伺服器逾時';
+  if (/HTTP 5\d\d/.test(msg)) return '伺服器錯誤（模型可能已失效）';
+  if (/HTTP 4\d\d/.test(msg)) return '請求被拒（檢查設定）';
+  if (/connection|connect|failed to fetch|no response|network/i.test(msg)) return '無法連線到伺服器';
+  return msg.length > 16 ? `${msg.slice(0, 16)}…` : msg || '翻譯失敗';
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function escapeAttr(s: string): string {
+  return escapeHtml(s).replace(/"/g, '&quot;');
 }
 
 const PEEK_PX = 24;
@@ -66,7 +87,8 @@ const CSS = `
     transition: opacity 0.15s ease;
   }
   #xt-floating-host:hover .xt-fab-label,
-  #xt-floating-host.xt-dragging .xt-fab-label { opacity: 1; }
+  #xt-floating-host.xt-dragging .xt-fab-label,
+  #xt-floating-host.xt-error-visible .xt-fab-label { opacity: 1; }
   .xt-fab-label.xt-label-active  { color: #1a73e8; }
   .xt-fab-label.xt-label-loading { color: #4285f4; }
   .xt-fab-label.xt-label-error   { color: #d32f2f; }
@@ -182,37 +204,44 @@ export class FloatingButton {
 
   private render(): void {
     if (!this.host) return;
-    const { bilingualEnabled, loading, error } = this.state;
+    const { bilingualEnabled, loading, error, errorMessage } = this.state;
 
     let btnClass = 'xt-fab-btn';
     let labelClass = 'xt-fab-label';
     let icon = '💬';
     let label = '翻譯';
+    let title = '雙語翻譯';
 
     if (loading) {
       btnClass += ' xt-loading';
       labelClass += ' xt-label-loading';
       icon = '⏳';
       label = '翻譯中';
+      title = '翻譯中…';
     } else if (error) {
       btnClass += ' xt-error';
       labelClass += ' xt-label-error';
       icon = '⚠️';
-      label = '失敗';
+      label = errorMessage ? errorReason(errorMessage) : '失敗';
+      // Full raw error in the tooltip for debugging; humanized reason on the label.
+      title = errorMessage ? `翻譯失敗：${errorMessage}（點此重試）` : '翻譯失敗 - 點此重試';
     } else if (bilingualEnabled) {
       btnClass += ' xt-active';
       labelClass += ' xt-label-active';
       icon = '🔤';
       label = '已翻譯';
+      title = '已翻譯';
     }
+
+    // Keep the reason on screen in the error state instead of revealing it only on hover.
+    this.host.classList.toggle('xt-error-visible', error);
 
     this.host.innerHTML = `
       <div id="xt-fab">
-        <div class="${btnClass}"
-             title="${error ? '翻譯失敗 - 點此重試' : loading ? '翻譯中…' : bilingualEnabled ? '已翻譯' : '雙語翻譯'}">
+        <div class="${btnClass}" title="${escapeAttr(title)}">
           ${icon}
         </div>
-        <div class="${labelClass}${loading ? ' xt-dots-anim' : ''}">${label}</div>
+        <div class="${labelClass}${loading ? ' xt-dots-anim' : ''}">${escapeHtml(label)}</div>
       </div>
     `;
   }

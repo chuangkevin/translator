@@ -179,6 +179,7 @@ export default defineContentScript({
       try {
         const targets = injector.getTargets();
         let successCount = 0;
+        let lastError = '';
 
         // Group elements into batches: one API call per batch ≈ BATCH_SIZE× faster.
         const batches: HTMLElement[][] = [];
@@ -213,6 +214,7 @@ export default defineContentScript({
                 successCount++;
               });
             } else {
+              lastError = result.error;
               batch.forEach((el, i) => {
                 placeholders[i]?.remove();
                 el.removeAttribute('data-xt-id');
@@ -227,7 +229,12 @@ export default defineContentScript({
           stopObserver();
           injector.clear();
         }
-        floatingBtn.updateState({ bilingualEnabled, loading: false, error: allFailed });
+        floatingBtn.updateState({
+          bilingualEnabled,
+          loading: false,
+          error: allFailed,
+          errorMessage: allFailed ? lastError : undefined,
+        });
       } finally {
         isTranslating = false;
       }
