@@ -97,8 +97,9 @@ export class OpenCodeClient {
           body: JSON.stringify({
             agent: 'general',
             model: this.messageModel,
-            system,
-            parts: [{ type: 'text', text }],
+            // OpenCode's general agent ignores the `system` field; prepend the
+            // instruction to the user message so the model actually follows it.
+            parts: [{ type: 'text', text: `${system}\n\n${text}` }],
           }),
         }),
         MESSAGE_TIMEOUT_MS,
