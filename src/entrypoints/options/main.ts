@@ -62,18 +62,86 @@ async function loadModels(serverUrl: string, selectedProvider: string, selectedM
   }
 }
 
-async function load() {
-  const s = await getSettings();
-  ($<HTMLInputElement>('serverUrl')).value = s.serverUrl;
-  ($<HTMLInputElement>('targetLang')).value = s.targetLang;
+// ── Server list UI ─────────────────────────────────────────────────────────
 
-  if (s.serverUrl) {
-    await loadModels(s.serverUrl, s.provider, s.model);
-  }
+function getServerUrls(): string[] {
+  const inputs = document.querySelectorAll<HTMLInputElement>('#server-list input.server-url');
+  return Array.from(inputs).map(i => i.value.trim()).filter(Boolean);
 }
 
+function renderServerList(urls: string[]) {
+  const list = $('server-list');
+  list.innerHTML = '';
+  const safeUrls = urls.length > 0 ? urls : [''];
+  safeUrls.forEach((url, idx) => {
+    const entry = document.createElement('div');
+    entry.className = 'server-entry';
+
+    const input = document.createElement('input');
+    input.type = 'url';
+    input.className = 'server-url';
+    input.value = url;
+    input.placeholder = 'http://localhost:3000';
+
+    const controls = document.createElement('div');
+    controls.className = 'server-entry-controls';
+
+    const upBtn = document.createElement('button');
+    upBtn.className = 'icon-btn';
+    upBtn.title = '上移';
+    upBtn.textContent = '↑';
+    upBtn.disabled = idx === 0;
+    upBtn.addEventListener('click', () => {
+      const current = getServerUrls();
+      if (idx === 0) return;
+      [current[idx - 1], current[idx]] = [current[idx], current[idx - 1]];
+      renderServerList(current);
+    });
+
+    const downBtn = document.createElement('button');
+    downBtn.className = 'icon-btn';
+    downBtn.title = '下移';
+    downBtn.textContent = '↓';
+    downBtn.disabled = idx === safeUrls.length - 1;
+    downBtn.addEventListener('click', () => {
+      const current = getServerUrls();
+      if (idx === current.length - 1) return;
+      [current[idx], current[idx + 1]] = [current[idx + 1], current[idx]];
+      renderServerList(current);
+    });
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'icon-btn danger';
+    delBtn.title = '刪除';
+    delBtn.textContent = '✕';
+    delBtn.addEventListener('click', () => {
+      const current = getServerUrls();
+      current.splice(idx, 1);
+      renderServerList(current.length > 0 ? current : ['']);
+    });
+
+    controls.appendChild(upBtn);
+    controls.appendChild(downBtn);
+    controls.appendChild(delBtn);
+    entry.appendChild(input);
+    entry.appendChild(controls);
+    list.appendChild(entry);
+  });
+}
+
+// ── Init ────────────────────────────────────────────────────────────────────
+
+$('add-server').addEventListener('click', () => {
+  const current = getServerUrls();
+  current.push('');
+  renderServerList(current);
+  const inputs = document.querySelectorAll<HTMLInputElement>('#server-list input.server-url');
+  inputs[inputs.length - 1]?.focus();
+});
+
 $('fetch-models').addEventListener('click', async () => {
-  const url = ($<HTMLInputElement>('serverUrl')).value.trim();
+  const urls = getServerUrls();
+  const url = urls[0];
   if (!url) { $('fetch-status').textContent = '請先輸入 Server URL'; return; }
   const cur = $<HTMLSelectElement>('provider').value;
   const curModel = $<HTMLSelectElement>('model').value;
@@ -83,8 +151,13 @@ $('fetch-models').addEventListener('click', async () => {
 $<HTMLSelectElement>('provider').addEventListener('change', () => onProviderChange());
 
 $('save').addEventListener('click', async () => {
+  const serverUrls = getServerUrls();
+  if (serverUrls.length === 0) {
+    $('status').textContent = '請至少輸入一個 Server URL';
+    return;
+  }
   await saveSettings({
-    serverUrl: ($<HTMLInputElement>('serverUrl')).value.trim(),
+    serverUrls,
     provider: $<HTMLSelectElement>('provider').value,
     model: $<HTMLSelectElement>('model').value,
     targetLang: ($<HTMLInputElement>('targetLang')).value.trim(),
@@ -93,5 +166,16 @@ $('save').addEventListener('click', async () => {
   status.textContent = '已儲存 ✓';
   setTimeout(() => { status.textContent = ''; }, 2000);
 });
+
+async function load() {
+  const s = await getSettings();
+  renderServerList(s.serverUrls?.length ? s.serverUrls : ['']);
+  ($<HTMLInputElement>('targetLang')).value = s.targetLang;
+
+  const primaryUrl = s.serverUrls?.[0];
+  if (primaryUrl) {
+    await loadModels(primaryUrl, s.provider, s.model);
+  }
+}
 
 load();

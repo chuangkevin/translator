@@ -1,5 +1,5 @@
 export interface ExtensionSettings {
-  serverUrl: string;
+  serverUrls: string[];
   provider: string;
   model: string;
   targetLang: string;
@@ -7,7 +7,7 @@ export interface ExtensionSettings {
 }
 
 export const DEFAULT_SETTINGS: ExtensionSettings = {
-  serverUrl: 'http://localhost:3000',
+  serverUrls: ['http://localhost:3000'],
   provider: 'openai',
   model: 'gpt-5.5',
   targetLang: '繁體中文',

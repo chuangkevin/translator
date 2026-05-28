@@ -82,6 +82,33 @@ function ytCaptionBridge(): void {
   window.addEventListener('yt-navigate-finish', update);
 }
 
+async function translateWithFailover(text: string, settings: ExtensionSettings): Promise<TranslateResult> {
+  const urls = settings.serverUrls?.length ? settings.serverUrls : ['http://localhost:3000'];
+  let lastError = '所有伺服器均無回應';
+  for (const serverUrl of urls) {
+    const client = new OpenCodeClient({ serverUrl, provider: settings.provider, model: settings.model, targetLang: settings.targetLang });
+    const translator = new Translator(client);
+    const result = await translator.translate(text);
+    if (result.ok) return result;
+    // 4xx = config error, no point trying next server
+    if (result.error.includes('HTTP 4')) break;
+    lastError = result.error;
+  }
+  return { ok: false, error: lastError };
+}
+
+async function translateBatchWithFailover(texts: string[], settings: ExtensionSettings): Promise<(string | null)[]> {
+  const urls = settings.serverUrls?.length ? settings.serverUrls : ['http://localhost:3000'];
+  for (const serverUrl of urls) {
+    const client = new OpenCodeClient({ serverUrl, provider: settings.provider, model: settings.model, targetLang: settings.targetLang });
+    const translator = new Translator(client);
+    const results = await translator.translateBatch(texts);
+    // If any translation succeeded, treat this server as working
+    if (results.some(r => r !== null)) return results;
+  }
+  return texts.map(() => null);
+}
+
 export default defineBackground(() => {
   console.log('[Translator BG] Service worker started');
 
@@ -126,14 +153,7 @@ export default defineBackground(() => {
             const uncachedTexts = uncachedIdxs.map(i => message.texts[i]);
             await acquireSlot();
             try {
-              const client = new OpenCodeClient({
-                serverUrl: settings.serverUrl,
-                provider: settings.provider,
-                model: settings.model,
-                targetLang: settings.targetLang,
-              });
-              const translator = new Translator(client);
-              const batchResult = await translator.translateBatch(uncachedTexts);
+              const batchResult = await translateBatchWithFailover(uncachedTexts, settings);
               batchResult.forEach((t, bi) => {
                 const origIdx = uncachedIdxs[bi];
                 results[origIdx] = t;
@@ -173,23 +193,16 @@ export default defineBackground(() => {
             sendResponse({ ok: true, translation: cached });
             return;
           }
-          console.log('[Translator BG] translate request | serverUrl:', settings.serverUrl, '| text:', message.text.slice(0, 40));
+          console.log('[Translator BG] translate request | servers:', settings.serverUrls, '| text:', message.text.slice(0, 40));
           await acquireSlot();
           let result: TranslateResult;
           try {
-            const client = new OpenCodeClient({
-              serverUrl: settings.serverUrl,
-              provider: settings.provider,
-              model: settings.model,
-              targetLang: settings.targetLang,
-            });
-            const translator = new Translator(client);
-            result = await translator.translate(message.text);
+            result = await translateWithFailover(message.text, settings);
           } finally {
             releaseSlot();
           }
           if (!result.ok) {
-            console.warn('[Translator BG] translate failed:', result.error, '| serverUrl:', settings.serverUrl);
+            console.warn('[Translator BG] translate failed:', result.error, '| servers:', settings.serverUrls);
           } else if (!result.translation) {
             console.warn('[Translator BG] empty translation, treating as failure');
             result = { ok: false, error: 'Empty translation result' };

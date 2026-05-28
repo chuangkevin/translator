@@ -1,4 +1,5 @@
-const SELECTOR = 'p, h1, h2, h3, h4, h5, h6, li, td, blockquote, #content-text, #video-title';
+// yt-attributed-string is YouTube's newer comment text element (replaces yt-formatted-string in comments)
+const SELECTOR = 'p, h1, h2, h3, h4, h5, h6, li, td, blockquote, #content-text, #video-title, yt-attributed-string';
 
 // Characters that exist only in Simplified Chinese (not Traditional Chinese)
 const SIMPLIFIED_CHARS = new Set(

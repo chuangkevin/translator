@@ -5,6 +5,7 @@ const chromeMock = {
     sync: {
       get: vi.fn(),
       set: vi.fn(),
+      remove: vi.fn(() => Promise.resolve()),
     },
     local: {
       get: vi.fn(() => Promise.resolve({})),

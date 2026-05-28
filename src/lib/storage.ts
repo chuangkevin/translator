@@ -1,7 +1,14 @@
 import { ExtensionSettings, DEFAULT_SETTINGS, SiteRules, DEFAULT_SITE_RULES } from './types';
 
 export async function getSettings(): Promise<ExtensionSettings> {
-  const stored = await chrome.storage.sync.get(null);
+  const stored = await chrome.storage.sync.get(null) as Record<string, unknown>;
+  // Migrate legacy single serverUrl to serverUrls array
+  if (stored.serverUrl && !stored.serverUrls) {
+    stored.serverUrls = [stored.serverUrl as string];
+    delete stored.serverUrl;
+    await chrome.storage.sync.set({ serverUrls: stored.serverUrls });
+    await chrome.storage.sync.remove('serverUrl');
+  }
   return { ...DEFAULT_SETTINGS, ...stored } as ExtensionSettings;
 }
 

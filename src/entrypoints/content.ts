@@ -83,9 +83,21 @@ export default defineContentScript({
     function startObserver() {
       mutationObserver = new MutationObserver((mutations) => {
         for (const mutation of mutations) {
-          for (const node of mutation.addedNodes) {
-            if (!(node instanceof HTMLElement)) continue;
-            for (const el of injector.getNewTargets(node)) pendingEls.add(el);
+          if (mutation.type === 'childList') {
+            for (const node of mutation.addedNodes) {
+              if (!(node instanceof HTMLElement)) continue;
+              for (const el of injector.getNewTargets(node)) pendingEls.add(el);
+            }
+          } else if (mutation.type === 'characterData') {
+            // YouTube fills comment text into existing nodes after appending the container
+            let el: Element | null = mutation.target.parentElement;
+            while (el) {
+              if (el instanceof HTMLElement && injector.getNewTargets(el).length > 0) {
+                for (const target of injector.getNewTargets(el)) pendingEls.add(target);
+                break;
+              }
+              el = el.parentElement;
+            }
           }
         }
         if (pendingEls.size === 0) return;
@@ -96,7 +108,7 @@ export default defineContentScript({
           Promise.all(els.map(el => translateEl(el))).catch(() => {});
         }, 200);
       });
-      mutationObserver.observe(document.body, { childList: true, subtree: true });
+      mutationObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
     }
 
     function stopObserver() {
@@ -111,9 +123,11 @@ export default defineContentScript({
       toggleBilingual().catch(() => {});
     }
 
-    // YouTube SPA: re-translate when navigating between videos (DOM is swapped, not added)
+    // YouTube SPA: re-translate when navigating between videos
+    // Clear first to remove stale injections, then re-translate the new page content
     window.addEventListener('yt-navigate-finish', () => {
       if (bilingualEnabled && !isTranslating) {
+        injector.clear();
         translatePage().catch(() => {});
       }
     });
