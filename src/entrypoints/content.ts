@@ -89,9 +89,10 @@ export default defineContentScript({
               for (const el of injector.getNewTargets(node)) pendingEls.add(el);
             }
           } else if (mutation.type === 'characterData') {
-            // YouTube fills comment text into existing nodes after appending the container
+            // YouTube fills comment text into existing nodes after appending the container.
+            // Stop before body to avoid a full-page rescan when caption overlay text changes.
             let el: Element | null = mutation.target.parentElement;
-            while (el) {
+            while (el && el !== document.body) {
               if (el instanceof HTMLElement && injector.getNewTargets(el).length > 0) {
                 for (const target of injector.getNewTargets(el)) pendingEls.add(target);
                 break;

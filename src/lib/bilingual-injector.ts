@@ -80,7 +80,11 @@ export class BilingualInjector {
     const insertInside = tag === 'TD' || tag === 'TH' || tag === 'LI';
     // h1-h6: use body-text size so the translation doesn't dominate the visual hierarchy.
     const isHeading = /^H[1-6]$/.test(tag);
-    const node = this.ownerDoc.createElement(insertInside ? 'div' : el.tagName.toLowerCase());
+    // Custom elements (tag names with hyphens, e.g. yt-attributed-string) must use a plain
+    // div — creating same-tag siblings triggers the host framework's element registration
+    // callbacks on uninitialized nodes, causing crashes (e.g. YouTube Polymer).
+    const safeTag = el.tagName.includes('-') ? 'div' : el.tagName.toLowerCase();
+    const node = this.ownerDoc.createElement(insertInside ? 'div' : safeTag);
     node.className = 'xt-translation xt-loading';
     node.textContent = '…';
     const win = this.ownerDoc.defaultView;
