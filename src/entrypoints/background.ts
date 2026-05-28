@@ -41,7 +41,7 @@ function scheduleSave(): void {
 
 // Global concurrency limit — prevents flooding the OpenCode server when many elements
 // are translated simultaneously. Each service worker activation starts fresh.
-let globalPermits = 5;
+let globalPermits = 10;
 const globalQueue: Array<() => void> = [];
 
 function acquireSlot(): Promise<void> {

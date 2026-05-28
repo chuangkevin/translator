@@ -155,9 +155,12 @@ export class YoutubeCaptionTranslator {
         this.pendingTimer = null;
         if (this.currentVideoId !== videoId || lastText !== text) return;
         const t = await this.onTranslate(text);
-        if (t && this.currentVideoId === videoId && lastText === text) {
+        if (this.currentVideoId !== videoId || lastText !== text) return;
+        if (t) {
           this.translationCache.set(text, t);
           this.setOverlayText(t);
+        } else {
+          this.setOverlayText('');
         }
       }, 80);
     };

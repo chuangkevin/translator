@@ -18,8 +18,13 @@ export default defineContentScript({
 
     const captionTranslator = new YoutubeCaptionTranslator(
       async (text) => {
-        const result = await sendTranslate(text);
-        return result.ok ? result.translation : null;
+        // Retry up to 3 times — background SW can be killed mid-flight when bilingual translation fills all slots
+        for (let attempt = 0; attempt < 3; attempt++) {
+          if (attempt > 0) await new Promise<void>(r => setTimeout(r, 800 * attempt));
+          const result = await sendTranslate(text);
+          if (result.ok) return result.translation;
+        }
+        return null;
       },
       sendTranslateBatch,
       fetchVttViaBackground,
