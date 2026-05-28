@@ -202,7 +202,7 @@ export default defineBackground(() => {
           console.log('[Translator BG] translate request | servers:', settings.serverUrls, '| text:', message.text.slice(0, 40));
           // Single translate requests bypass the slot queue so they are never blocked by
           // concurrent translate-batch calls. The slot queue is only needed for batches.
-          const result = await translateWithFailover(message.text, settings);
+          let result = await translateWithFailover(message.text, settings);
           if (!result.ok) {
             console.warn('[Translator BG] translate failed:', result.error, '| servers:', settings.serverUrls);
           } else if (!result.translation) {
