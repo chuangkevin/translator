@@ -48,15 +48,23 @@ export class YoutubeCaptionTranslator {
   private rafId: number | null = null;
   private abortController: AbortController | null = null;
   private currentVideoId: string | null = null;
+  private navigateListener: (() => void) | null = null;
 
   constructor(private onTranslate: (text: string) => Promise<string | null>) {}
 
   start(): void {
     this.initForCurrentVideo();
-    window.addEventListener('yt-navigate-finish', () => this.initForCurrentVideo());
+    if (!this.navigateListener) {
+      this.navigateListener = () => this.initForCurrentVideo();
+      window.addEventListener('yt-navigate-finish', this.navigateListener);
+    }
   }
 
   stop(): void {
+    if (this.navigateListener) {
+      window.removeEventListener('yt-navigate-finish', this.navigateListener);
+      this.navigateListener = null;
+    }
     this.cleanup();
   }
 
@@ -118,7 +126,14 @@ export class YoutubeCaptionTranslator {
   private translateAll(videoId: string): void {
     const controller = new AbortController();
     this.abortController = controller;
-    let idx = 0;
+
+    // Start from the segment nearest to current playback time so the viewer
+    // sees translations immediately rather than waiting for the whole video
+    // to translate from the beginning.
+    const video = document.querySelector<HTMLVideoElement>('video');
+    const currentMs = (video?.currentTime ?? 0) * 1000;
+    const nearestIdx = this.segments.findIndex(s => s.endMs >= currentMs - 2000);
+    let idx = nearestIdx >= 0 ? nearestIdx : 0;
 
     const worker = async () => {
       while (!controller.signal.aborted && this.currentVideoId === videoId) {
@@ -132,7 +147,7 @@ export class YoutubeCaptionTranslator {
       }
     };
 
-    // 5 concurrent workers process segments in order (earliest captions first)
+    // 5 concurrent workers translate from current playback position forward
     Promise.all(Array.from({ length: 5 }, worker)).catch(() => {});
   }
 
@@ -184,5 +199,6 @@ export class YoutubeCaptionTranslator {
     this.overlay?.remove();
     this.overlay = null;
     this.segments = [];
+    this.currentVideoId = null;
   }
 }
