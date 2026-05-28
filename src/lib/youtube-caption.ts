@@ -168,6 +168,9 @@ export class YoutubeCaptionTranslator {
     const observer = new MutationObserver(handleMutation);
     observer.observe(container, { childList: true, subtree: true, characterData: true });
     this.domObserver = observer;
+
+    // Immediately process any caption that is already visible when the observer attaches
+    handleMutation();
   }
 
   private createOverlay(): void {
