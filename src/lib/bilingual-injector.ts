@@ -104,6 +104,7 @@ export class BilingualInjector {
           ? `${Math.max(Math.round(parseFloat(cs.fontSize) * 0.7), 14)}px`
           : cs.fontSize;
         applyStyles(node, {
+          display: 'block',
           fontFamily: cs.fontFamily,
           fontSize,
           fontWeight: cs.fontWeight,
