@@ -48,6 +48,7 @@ export default defineContentScript({
 
       btn.addEventListener('click', () => {
         captionOn = !captionOn;
+        console.log('[XT Caption] button toggled:', captionOn);
         if (captionOn) {
           captionTranslator.start();
         } else {

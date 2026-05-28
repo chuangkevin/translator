@@ -87,10 +87,11 @@ export class YoutubeCaptionTranslator {
     this.currentVideoId = videoId;
     this.cleanup();
 
-    // Show status immediately so the user knows the feature is active
+    console.log('[XT Caption] init video:', videoId);
     this.createOverlay('字幕載入中…');
 
     const url = await this.waitForCaptionUrl(videoId);
+    console.log('[XT Caption] caption url:', url ? url.slice(0, 80) : 'NOT FOUND');
     if (!url || this.currentVideoId !== videoId) {
       this.setOverlayStatus('找不到字幕', 3000);
       return;
@@ -102,16 +103,19 @@ export class YoutubeCaptionTranslator {
 
     // If the first URL failed (expired token or wrong fmt), try direct URL
     if ((!vttText || !vttText.includes('WEBVTT')) && this.currentVideoId === videoId) {
+      console.log('[XT Caption] first url failed, trying direct');
       const fallback = await fetchCaptionUrlDirect(videoId);
       if (fallback) vttText = await fetch(fallback).then(r => r.ok ? r.text() : null).catch(() => null);
     }
 
+    console.log('[XT Caption] vtt ok:', !!(vttText?.includes('WEBVTT')), 'length:', vttText?.length ?? 0);
     if (!vttText || !vttText.includes('WEBVTT') || this.currentVideoId !== videoId) {
       this.setOverlayStatus('字幕載入失敗', 3000);
       return;
     }
 
     this.segments = parseVtt(vttText);
+    console.log('[XT Caption] segments:', this.segments.length);
     if (!this.segments.length) {
       this.setOverlayStatus('無法解析字幕', 3000);
       return;
