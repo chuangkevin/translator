@@ -69,7 +69,13 @@ function ytCaptionBridge(): void {
         data?.captions?.playerCaptionsTracklistRenderer?.captionTracks ?? [];
       const el = document.documentElement;
       if (tracks[0]?.baseUrl) {
-        el.dataset.xtCaptionUrl = `${tracks[0].baseUrl}&fmt=vtt`;
+        try {
+          const u = new URL(tracks[0].baseUrl);
+          u.searchParams.set('fmt', 'vtt');
+          el.dataset.xtCaptionUrl = u.toString();
+        } catch {
+          el.dataset.xtCaptionUrl = `${tracks[0].baseUrl}&fmt=vtt`;
+        }
         el.dataset.xtVideoId = data?.videoDetails?.videoId ?? '';
       } else {
         delete el.dataset.xtCaptionUrl;

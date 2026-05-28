@@ -98,8 +98,15 @@ export class YoutubeCaptionTranslator {
 
     this.setOverlayText('字幕翻譯中…');
 
-    const vttText = await fetch(url).then(r => r.text()).catch(() => null);
-    if (!vttText || this.currentVideoId !== videoId) {
+    let vttText = await fetch(url).then(r => r.ok ? r.text() : null).catch(() => null);
+
+    // If the first URL failed (expired token or wrong fmt), try direct URL
+    if ((!vttText || !vttText.includes('WEBVTT')) && this.currentVideoId === videoId) {
+      const fallback = await fetchCaptionUrlDirect(videoId);
+      if (fallback) vttText = await fetch(fallback).then(r => r.ok ? r.text() : null).catch(() => null);
+    }
+
+    if (!vttText || !vttText.includes('WEBVTT') || this.currentVideoId !== videoId) {
       this.setOverlayStatus('字幕載入失敗', 3000);
       return;
     }

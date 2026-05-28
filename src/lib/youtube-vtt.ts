@@ -59,12 +59,19 @@ export function getCaptionUrlFromPageScript(): string | null {
     if (!text.includes('captionTracks')) continue;
     const match = text.match(/"captionTracks":\s*\[.*?"baseUrl"\s*:\s*"([^"]+)"/s);
     if (!match) continue;
-    const url = match[1]
+    const raw = match[1]
       .replace(/\\u0026/g, '&')
       .replace(/\\u003d/g, '=')
       .replace(/\\u003D/g, '=')
       .replace(/\\\//g, '/');
-    return `${url}&fmt=vtt`;
+    // Use URL so fmt=vtt overrides any existing fmt parameter
+    try {
+      const u = new URL(raw);
+      u.searchParams.set('fmt', 'vtt');
+      return u.toString();
+    } catch {
+      return `${raw}&fmt=vtt`;
+    }
   }
   return null;
 }
