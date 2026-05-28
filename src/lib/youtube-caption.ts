@@ -91,7 +91,7 @@ export class YoutubeCaptionTranslator {
     this.createOverlay('字幕載入中…');
 
     const url = await this.waitForCaptionUrl(videoId);
-    console.log('[XT Caption] caption url:', url ? url.slice(0, 80) : 'NOT FOUND');
+    console.log('[XT Caption] caption url:', url ?? 'NOT FOUND');
     if (!url || this.currentVideoId !== videoId) {
       this.setOverlayStatus('找不到字幕', 3000);
       return;
@@ -99,13 +99,20 @@ export class YoutubeCaptionTranslator {
 
     this.setOverlayText('字幕翻譯中…');
 
-    let vttText = await fetch(url).then(r => r.ok ? r.text() : null).catch(() => null);
+    let vttText = await fetch(url, { credentials: 'include' }).then(async r => {
+      console.log('[XT Caption] fetch status:', r.status, r.headers.get('content-type'));
+      return r.ok ? r.text() : null;
+    }).catch(e => { console.log('[XT Caption] fetch error:', String(e)); return null; });
 
     // If the first URL failed (expired token or wrong fmt), try direct URL
     if ((!vttText || !vttText.includes('WEBVTT')) && this.currentVideoId === videoId) {
-      console.log('[XT Caption] first url failed, trying direct');
+      console.log('[XT Caption] first url failed, trying direct, vttText first 80:', vttText?.slice(0, 80));
       const fallback = await fetchCaptionUrlDirect(videoId);
-      if (fallback) vttText = await fetch(fallback).then(r => r.ok ? r.text() : null).catch(() => null);
+      console.log('[XT Caption] direct fallback url:', fallback?.slice(0, 80));
+      if (fallback) vttText = await fetch(fallback, { credentials: 'include' }).then(async r => {
+        console.log('[XT Caption] direct fetch status:', r.status);
+        return r.ok ? r.text() : null;
+      }).catch(() => null);
     }
 
     console.log('[XT Caption] vtt ok:', !!(vttText?.includes('WEBVTT')), 'length:', vttText?.length ?? 0);
