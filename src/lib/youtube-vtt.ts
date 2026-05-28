@@ -79,6 +79,24 @@ export function getCaptionUrl(videoId?: string): string | null {
   return url;
 }
 
+// Direct timedtext URL — works without the MAIN-world bridge.
+// Tries auto-generated English captions first, then manual English.
+export async function fetchCaptionUrlDirect(videoId: string): Promise<string | null> {
+  const candidates = [
+    `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&kind=asr&fmt=vtt`,
+    `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=vtt`,
+  ];
+  for (const url of candidates) {
+    try {
+      const r = await fetch(url);
+      if (!r.ok) continue;
+      const t = await r.text();
+      if (t.includes('WEBVTT')) return url;
+    } catch {}
+  }
+  return null;
+}
+
 // Fallback: YouTube's timedtext list API when ytInitialPlayerResponse is unavailable.
 export async function fetchCaptionUrlFromApi(videoId: string): Promise<string | null> {
   try {

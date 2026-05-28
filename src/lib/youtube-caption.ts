@@ -1,4 +1,4 @@
-import { type CaptionSegment, fetchCaptionUrlFromApi, getCaptionUrl, getCaptionUrlFromPageScript, parseVtt } from './youtube-vtt';
+import { type CaptionSegment, fetchCaptionUrlDirect, fetchCaptionUrlFromApi, getCaptionUrl, getCaptionUrlFromPageScript, parseVtt } from './youtube-vtt';
 
 // Kept for backward compatibility with tests
 export class LRUCache<K, V> {
@@ -42,6 +42,8 @@ const OVERLAY_CSS = [
   'box-sizing:border-box',
 ].join(';');
 
+const BATCH_SIZE = 5;
+
 export class YoutubeCaptionTranslator {
   private segments: CaptionSegment[] = [];
   private overlay: HTMLElement | null = null;
@@ -50,7 +52,10 @@ export class YoutubeCaptionTranslator {
   private currentVideoId: string | null = null;
   private navigateListener: (() => void) | null = null;
 
-  constructor(private onTranslate: (text: string) => Promise<string | null>) {}
+  constructor(
+    private onTranslate: (text: string) => Promise<string | null>,
+    private onTranslateBatch?: (texts: string[]) => Promise<(string | null)[]>,
+  ) {}
 
   start(): void {
     this.initForCurrentVideo();
@@ -82,29 +87,50 @@ export class YoutubeCaptionTranslator {
     this.currentVideoId = videoId;
     this.cleanup();
 
+    // Show status immediately so the user knows the feature is active
+    this.createOverlay('字幕載入中…');
+
     const url = await this.waitForCaptionUrl(videoId);
-    if (!url || this.currentVideoId !== videoId) return;
+    if (!url || this.currentVideoId !== videoId) {
+      this.setOverlayStatus('找不到字幕', 3000);
+      return;
+    }
+
+    this.setOverlayText('字幕翻譯中…');
 
     const vttText = await fetch(url).then(r => r.text()).catch(() => null);
-    if (!vttText || this.currentVideoId !== videoId) return;
+    if (!vttText || this.currentVideoId !== videoId) {
+      this.setOverlayStatus('字幕載入失敗', 3000);
+      return;
+    }
 
     this.segments = parseVtt(vttText);
-    if (!this.segments.length) return;
+    if (!this.segments.length) {
+      this.setOverlayStatus('無法解析字幕', 3000);
+      return;
+    }
 
     await this.waitForPlayer();
     if (this.currentVideoId !== videoId) return;
 
-    this.createOverlay();
     this.startPlayback();
     this.translateAll(videoId);
   }
 
   private async waitForCaptionUrl(videoId: string, maxMs = 5000): Promise<string | null> {
-    // 1. Fastest: read captionTracks from inline <script> tag (isolated-world accessible)
+    // 1. Fastest: inline <script> tag (synchronous, no network)
     const fromScript = getCaptionUrlFromPageScript();
     if (fromScript) return fromScript;
 
-    // 2. Poll dataset attribute written by the MAIN-world bridge in background.ts
+    // 2. MAIN-world bridge dataset (may already be set)
+    const quick = getCaptionUrl(videoId);
+    if (quick) return quick;
+
+    // 3. Direct timedtext URL — works without the bridge (English auto-generated captions)
+    const direct = await fetchCaptionUrlDirect(videoId);
+    if (direct) return direct;
+
+    // 4. Poll bridge dataset for remaining time
     const deadline = Date.now() + maxMs;
     while (Date.now() < deadline) {
       const url = getCaptionUrl(videoId);
@@ -112,7 +138,7 @@ export class YoutubeCaptionTranslator {
       await new Promise<void>(r => setTimeout(r, 300));
     }
 
-    // 3. Last resort: YouTube timedtext list API
+    // 5. type=list API
     return fetchCaptionUrlFromApi(videoId);
   }
 
@@ -128,9 +154,7 @@ export class YoutubeCaptionTranslator {
     const controller = new AbortController();
     this.abortController = controller;
 
-    // Start from the segment nearest to current playback time so the viewer
-    // sees translations immediately rather than waiting for the whole video
-    // to translate from the beginning.
+    // Start from the segment nearest to current playback time
     const video = document.querySelector<HTMLVideoElement>('video');
     const currentMs = (video?.currentTime ?? 0) * 1000;
     const nearestIdx = this.segments.findIndex(s => s.endMs >= currentMs - 2000);
@@ -138,27 +162,67 @@ export class YoutubeCaptionTranslator {
 
     const worker = async () => {
       while (!controller.signal.aborted && this.currentVideoId === videoId) {
-        const seg = this.segments[idx++];
-        if (!seg) break;
-        if (!seg.text) continue;
-        const translation = await this.onTranslate(seg.text);
-        if (translation && !controller.signal.aborted) {
-          seg.translation = translation;
+        // Grab next batch synchronously (no await, so no race on idx)
+        const batch: Array<{ seg: CaptionSegment }> = [];
+        while (batch.length < BATCH_SIZE) {
+          const seg = this.segments[idx++];
+          if (!seg) break;
+          if (seg.text && !seg.translation) batch.push({ seg });
+        }
+        if (!batch.length) break;
+
+        let translations: (string | null)[];
+        if (this.onTranslateBatch) {
+          translations = await this.onTranslateBatch(batch.map(b => b.seg.text));
+        } else {
+          translations = await Promise.all(batch.map(b => this.onTranslate(b.seg.text)));
+        }
+
+        if (!controller.signal.aborted && this.currentVideoId === videoId) {
+          translations.forEach((t, i) => { if (t) batch[i].seg.translation = t; });
         }
       }
     };
 
-    // 5 concurrent workers translate from current playback position forward
-    Promise.all(Array.from({ length: 5 }, worker)).catch(() => {});
+    // 3 concurrent workers, each processing BATCH_SIZE segments at a time
+    Promise.all(Array.from({ length: 3 }, worker)).catch(() => {});
   }
 
-  private createOverlay(): void {
+  private createOverlay(initialText = ''): void {
     this.overlay?.remove();
     const el = document.createElement('div');
     el.id = 'xt-yt-overlay';
     el.style.cssText = OVERLAY_CSS;
+    el.textContent = initialText;
     document.body.appendChild(el);
     this.overlay = el;
+    // Position immediately based on current video rect
+    const video = document.querySelector<HTMLVideoElement>('video');
+    if (video) this.positionOverlay(el, video);
+  }
+
+  private setOverlayText(text: string): void {
+    if (this.overlay) this.overlay.textContent = text;
+  }
+
+  private setOverlayStatus(text: string, removeAfterMs: number): void {
+    this.setOverlayText(text);
+    setTimeout(() => {
+      if (this.overlay?.textContent === text) {
+        this.overlay.remove();
+        this.overlay = null;
+      }
+    }, removeAfterMs);
+  }
+
+  private positionOverlay(el: HTMLElement, video: HTMLVideoElement): void {
+    const rect = video.getBoundingClientRect();
+    if (rect.width > 0) {
+      const padH = rect.width * 0.05;
+      el.style.left = `${rect.left + padH}px`;
+      el.style.width = `${rect.width - padH * 2}px`;
+      el.style.bottom = `${window.innerHeight - rect.bottom + rect.height * 0.1}px`;
+    }
   }
 
   private startPlayback(): void {
@@ -170,21 +234,19 @@ export class YoutubeCaptionTranslator {
       this.rafId = requestAnimationFrame(tick);
       if (!this.overlay) return;
 
-      // Keep overlay anchored to the video element regardless of scroll or layout changes
-      const rect = video.getBoundingClientRect();
-      if (rect.width > 0) {
-        const padH = rect.width * 0.05;
-        this.overlay.style.left = `${rect.left + padH}px`;
-        this.overlay.style.width = `${rect.width - padH * 2}px`;
-        this.overlay.style.bottom = `${window.innerHeight - rect.bottom + rect.height * 0.1}px`;
-      }
+      this.positionOverlay(this.overlay, video);
 
       const ms = video.currentTime * 1000;
       const seg = this.segments.find(s => ms >= s.startMs && ms < s.endMs);
       const key = `${seg?.startMs ?? ''}`;
       if (key !== lastKey) {
-        this.overlay.textContent = seg?.translation ?? '';
+        // Show '…' while this segment's translation is still pending
+        this.overlay.textContent = seg ? (seg.translation ?? '…') : '';
         lastKey = key;
+      } else if (seg && !seg.translation && this.overlay.textContent !== '…') {
+        // Translation arrived — update if we were showing placeholder
+      } else if (seg?.translation && this.overlay.textContent === '…') {
+        this.overlay.textContent = seg.translation;
       }
     };
     this.rafId = requestAnimationFrame(tick);

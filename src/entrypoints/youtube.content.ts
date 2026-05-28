@@ -1,5 +1,5 @@
 import { YoutubeCaptionTranslator } from '../lib/youtube-caption';
-import type { TranslateMessage, TranslateResult } from '../lib/types';
+import type { TranslateBatchMessage, TranslateBatchResult, TranslateMessage, TranslateResult } from '../lib/types';
 
 const BUTTON_ID = 'xt-caption-toggle';
 const BUTTON_ON_TITLE = '關閉字幕翻譯';
@@ -16,10 +16,13 @@ export default defineContentScript({
   main() {
     let captionOn = false;
 
-    const captionTranslator = new YoutubeCaptionTranslator(async (text) => {
-      const result = await sendTranslate(text);
-      return result.ok ? result.translation : null;
-    });
+    const captionTranslator = new YoutubeCaptionTranslator(
+      async (text) => {
+        const result = await sendTranslate(text);
+        return result.ok ? result.translation : null;
+      },
+      sendTranslateBatch,
+    );
 
     function updateButtonState(btn: HTMLButtonElement) {
       btn.title = captionOn ? BUTTON_ON_TITLE : BUTTON_OFF_TITLE;
@@ -97,6 +100,16 @@ function sendTranslate(text: string): Promise<TranslateResult> {
         return;
       }
       resolve(result ?? { ok: false, error: 'No response' });
+    });
+  });
+}
+
+function sendTranslateBatch(texts: string[]): Promise<(string | null)[]> {
+  return new Promise(resolve => {
+    const msg: TranslateBatchMessage = { type: 'translate-batch', texts };
+    chrome.runtime.sendMessage(msg, (result: TranslateBatchResult) => {
+      void chrome.runtime.lastError;
+      resolve(result?.ok ? result.translations : texts.map(() => null));
     });
   });
 }
