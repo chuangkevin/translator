@@ -135,14 +135,21 @@ export class YoutubeCaptionTranslator {
 
       const text = this.getCaptionText(container);
       if (text === lastText) return;
-      lastText = text;
 
       if (this.pendingTimer) { clearTimeout(this.pendingTimer); this.pendingTimer = null; }
 
       if (!text) {
-        this.setOverlayText('');
+        // Delay clearing so brief inter-segment gaps don't flash the overlay away.
+        // If new caption text arrives within 400ms the timer is cancelled.
+        this.pendingTimer = setTimeout(() => {
+          this.pendingTimer = null;
+          lastText = '';
+          this.setOverlayText('');
+        }, 400);
         return;
       }
+
+      lastText = text;
 
       const cached = this.translationCache.get(text);
       if (cached) {
