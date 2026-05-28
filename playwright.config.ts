@@ -8,7 +8,8 @@ const EXTENSION_PATH = path.resolve(__dirname, '.output/chrome-mv3');
 export default defineConfig({
   testDir: './e2e',
   timeout: 30000,
-  retries: 0,
+  retries: 1,
+  workers: 1,
   use: {
     headless: false,
     viewport: { width: 1280, height: 800 },

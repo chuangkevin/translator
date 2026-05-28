@@ -79,9 +79,10 @@ test.describe('Dynamic content is included when translation starts', () => {
 
       // Wait for any in-progress auto-translate to finish so isTranslating is false.
       // When loading is done the FAB button loses the xt-loading class.
+      // 25s covers the worst case: SESSION_CREATE_TIMEOUT_MS (10s) + network overhead + SW cold start.
       await page.waitForFunction(
         () => !document.querySelector('#xt-fab .xt-fab-btn.xt-loading'),
-        { timeout: 10000 },
+        { timeout: 25000 },
       );
 
       // Scroll to inject #dynamic BEFORE clicking the FAB.
