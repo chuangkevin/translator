@@ -91,6 +91,9 @@ export default defineContentScript({
       if (captionOn) {
         captionTranslator.stop();
         captionOn = false;
+        // Sync button title with the reset state so the next click sees the correct toggle direction
+        const existingBtn = document.getElementById(BUTTON_ID) as HTMLButtonElement | null;
+        if (existingBtn) updateButtonState(existingBtn);
       }
       waitAndInjectButton().catch(() => {});
     });

@@ -155,11 +155,13 @@ export class YoutubeCaptionTranslator {
         this.pendingTimer = null;
         if (this.currentVideoId !== videoId || lastText !== text) return;
         const t = await this.onTranslate(text);
-        if (this.currentVideoId !== videoId || lastText !== text) return;
+        // Always cache and display even if the visible caption has moved on —
+        // a one-sentence lag is far better than perpetually showing nothing.
+        if (this.currentVideoId !== videoId) return;
         if (t) {
           this.translationCache.set(text, t);
           this.setOverlayText(t);
-        } else {
+        } else if (lastText === text) {
           this.setOverlayText('');
         }
       }, 80);
