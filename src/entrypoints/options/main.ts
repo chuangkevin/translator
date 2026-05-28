@@ -69,6 +69,11 @@ function getServerUrls(): string[] {
   return Array.from(inputs).map(i => i.value.trim()).filter(Boolean);
 }
 
+function getRawServerUrls(): string[] {
+  const inputs = document.querySelectorAll<HTMLInputElement>('#server-list input.server-url');
+  return Array.from(inputs).map(i => i.value.trim());
+}
+
 function renderServerList(urls: string[]) {
   const list = $('server-list');
   list.innerHTML = '';
@@ -92,7 +97,7 @@ function renderServerList(urls: string[]) {
     upBtn.textContent = '↑';
     upBtn.disabled = idx === 0;
     upBtn.addEventListener('click', () => {
-      const current = getServerUrls();
+      const current = getRawServerUrls();
       if (idx === 0) return;
       [current[idx - 1], current[idx]] = [current[idx], current[idx - 1]];
       renderServerList(current);
@@ -104,7 +109,7 @@ function renderServerList(urls: string[]) {
     downBtn.textContent = '↓';
     downBtn.disabled = idx === safeUrls.length - 1;
     downBtn.addEventListener('click', () => {
-      const current = getServerUrls();
+      const current = getRawServerUrls();
       if (idx === current.length - 1) return;
       [current[idx], current[idx + 1]] = [current[idx + 1], current[idx]];
       renderServerList(current);
@@ -115,7 +120,7 @@ function renderServerList(urls: string[]) {
     delBtn.title = '刪除';
     delBtn.textContent = '✕';
     delBtn.addEventListener('click', () => {
-      const current = getServerUrls();
+      const current = getRawServerUrls();
       current.splice(idx, 1);
       renderServerList(current.length > 0 ? current : ['']);
     });
@@ -132,11 +137,13 @@ function renderServerList(urls: string[]) {
 // ── Init ────────────────────────────────────────────────────────────────────
 
 $('add-server').addEventListener('click', () => {
-  const current = getServerUrls();
+  // Read raw values (including empties) so we don't collapse empty rows
+  const inputs = document.querySelectorAll<HTMLInputElement>('#server-list input.server-url');
+  const current = Array.from(inputs).map(i => i.value.trim());
   current.push('');
   renderServerList(current);
-  const inputs = document.querySelectorAll<HTMLInputElement>('#server-list input.server-url');
-  inputs[inputs.length - 1]?.focus();
+  const newInputs = document.querySelectorAll<HTMLInputElement>('#server-list input.server-url');
+  newInputs[newInputs.length - 1]?.focus();
 });
 
 $('fetch-models').addEventListener('click', async () => {

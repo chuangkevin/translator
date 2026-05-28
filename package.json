@@ -11,9 +11,13 @@
     "zip": "wxt zip",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "npm run build && playwright test --project=extension",
+    "test:e2e:options": "npm run build && playwright test e2e/options-multiserver.spec.ts --project=extension",
+    "test:e2e:youtube": "npm run build && playwright test e2e/youtube-button.spec.ts --project=extension",
     "prepare": "wxt prepare"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@types/chrome": "^0.0.268",
     "@vitest/coverage-v8": "^2.0.0",
     "jsdom": "^24.0.0",

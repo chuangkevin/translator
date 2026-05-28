@@ -30,8 +30,11 @@ export default defineContentScript({
       const existing = document.getElementById(BUTTON_ID) as HTMLButtonElement | null;
       if (existing) return existing;
 
-      const controls = document.querySelector('.ytp-right-controls');
-      if (!controls) return null;
+      // Target the left sub-container; fall back to the outer .ytp-right-controls
+      const container =
+        document.querySelector('.ytp-right-controls-left') ??
+        document.querySelector('.ytp-right-controls');
+      if (!container) return null;
 
       const btn = document.createElement('button');
       btn.id = BUTTON_ID;
@@ -50,8 +53,13 @@ export default defineContentScript({
         updateButtonState(btn);
       });
 
-      // Insert before the settings button (last button in right controls)
-      controls.insertBefore(btn, controls.firstChild);
+      // Insert before the settings button so our button sits next to subtitles
+      const settingsBtn = container.querySelector('.ytp-settings-button');
+      if (settingsBtn) {
+        container.insertBefore(btn, settingsBtn);
+      } else {
+        container.appendChild(btn);
+      }
       return btn;
     }
 
