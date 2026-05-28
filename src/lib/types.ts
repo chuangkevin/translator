@@ -49,3 +49,6 @@ export interface ApplySiteRuleMessage {
   type: 'apply-site-rule';
   behavior: 'always' | 'never' | 'skip' | 'default';
 }
+
+export interface FetchVttMessage { type: 'fetch-vtt'; url: string; }
+export type FetchVttResult = { ok: true; content: string } | { ok: false; error: string };

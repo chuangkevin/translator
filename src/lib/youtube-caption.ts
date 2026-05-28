@@ -1,4 +1,4 @@
-import { type CaptionSegment, fetchCaptionUrlDirect, fetchCaptionUrlFromApi, getCaptionUrl, getCaptionUrlFromPageScript, parseVtt } from './youtube-vtt';
+import { type CaptionSegment, fetchCaptionUrlFromApi, getCaptionUrl, getCaptionUrlFromPageScript, parseVtt } from './youtube-vtt';
 
 // Kept for backward compatibility with tests
 export class LRUCache<K, V> {
@@ -55,6 +55,8 @@ export class YoutubeCaptionTranslator {
   constructor(
     private onTranslate: (text: string) => Promise<string | null>,
     private onTranslateBatch?: (texts: string[]) => Promise<(string | null)[]>,
+    // Proxy fetch via background SW to bypass YouTube's own service worker
+    private onFetchUrl?: (url: string) => Promise<string | null>,
   ) {}
 
   start(): void {
@@ -81,6 +83,13 @@ export class YoutubeCaptionTranslator {
     return match?.[1] ?? null;
   }
 
+  private async doFetch(url: string): Promise<string | null> {
+    if (this.onFetchUrl) return this.onFetchUrl(url);
+    return window.fetch(url, { credentials: 'include' })
+      .then(r => r.ok ? r.text() : null)
+      .catch(() => null);
+  }
+
   private async initForCurrentVideo(): Promise<void> {
     const videoId = this.getVideoId();
     if (!videoId || videoId === this.currentVideoId) return;
@@ -90,43 +99,23 @@ export class YoutubeCaptionTranslator {
     console.log('[XT Caption] init video:', videoId);
     this.createOverlay('字幕載入中…');
 
-    const url = await this.waitForCaptionUrl(videoId);
-    console.log('[XT Caption] caption url:', url ?? 'NOT FOUND');
-    if (!url || this.currentVideoId !== videoId) {
+    const result = await this.waitForCaptionUrl(videoId);
+    console.log('[XT Caption] result:', result ? `${result.url.slice(0, 80)} (${result.content.length}b)` : 'NOT FOUND');
+
+    if (!result || this.currentVideoId !== videoId) {
       this.setOverlayStatus('找不到字幕', 3000);
       return;
     }
 
-    this.setOverlayText('字幕翻譯中…');
-
-    let vttText = await fetch(url, { credentials: 'include' }).then(async r => {
-      console.log('[XT Caption] fetch status:', r.status, r.headers.get('content-type'));
-      return r.ok ? r.text() : null;
-    }).catch(e => { console.log('[XT Caption] fetch error:', String(e)); return null; });
-
-    // If the first URL failed (expired token or wrong fmt), try direct URL
-    if ((!vttText || !vttText.includes('WEBVTT')) && this.currentVideoId === videoId) {
-      console.log('[XT Caption] first url failed, trying direct, vttText first 80:', vttText?.slice(0, 80));
-      const fallback = await fetchCaptionUrlDirect(videoId);
-      console.log('[XT Caption] direct fallback url:', fallback?.slice(0, 80));
-      if (fallback) vttText = await fetch(fallback, { credentials: 'include' }).then(async r => {
-        console.log('[XT Caption] direct fetch status:', r.status);
-        return r.ok ? r.text() : null;
-      }).catch(() => null);
-    }
-
-    console.log('[XT Caption] vtt ok:', !!(vttText?.includes('WEBVTT')), 'length:', vttText?.length ?? 0);
-    if (!vttText || !vttText.includes('WEBVTT') || this.currentVideoId !== videoId) {
-      this.setOverlayStatus('字幕載入失敗', 3000);
-      return;
-    }
-
-    this.segments = parseVtt(vttText);
+    this.segments = parseVtt(result.content);
     console.log('[XT Caption] segments:', this.segments.length);
+
     if (!this.segments.length) {
       this.setOverlayStatus('無法解析字幕', 3000);
       return;
     }
+
+    this.setOverlayText('字幕翻譯中…');
 
     await this.waitForPlayer();
     if (this.currentVideoId !== videoId) return;
@@ -135,29 +124,46 @@ export class YoutubeCaptionTranslator {
     this.translateAll(videoId);
   }
 
-  private async waitForCaptionUrl(videoId: string, maxMs = 5000): Promise<string | null> {
-    // 1. Fastest: inline <script> tag (synchronous, no network)
+  // Returns the URL + pre-fetched WEBVTT content so we don't need a second fetch.
+  private async waitForCaptionUrl(
+    videoId: string,
+    maxMs = 5000,
+  ): Promise<{ url: string; content: string } | null> {
+    const tryUrl = async (url: string): Promise<{ url: string; content: string } | null> => {
+      const content = await this.doFetch(url);
+      if (content?.includes('WEBVTT')) return { url, content };
+      return null;
+    };
+
+    // 1. Inline <script> tag — synchronous find, then verify via background fetch
     const fromScript = getCaptionUrlFromPageScript();
-    if (fromScript) return fromScript;
+    if (fromScript) { const r = await tryUrl(fromScript); if (r) return r; }
 
-    // 2. MAIN-world bridge dataset (may already be set)
-    const quick = getCaptionUrl(videoId);
-    if (quick) return quick;
+    // 2. MAIN-world bridge dataset
+    { const url = getCaptionUrl(videoId); if (url) { const r = await tryUrl(url); if (r) return r; } }
 
-    // 3. Direct timedtext URL — works without the bridge (English auto-generated captions)
-    const direct = await fetchCaptionUrlDirect(videoId);
-    if (direct) return direct;
+    // 3. Direct timedtext URLs (no auth needed, works for English auto-generated)
+    for (const url of [
+      `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&kind=asr&fmt=vtt`,
+      `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=vtt`,
+    ]) {
+      const r = await tryUrl(url);
+      if (r) return r;
+    }
 
     // 4. Poll bridge dataset for remaining time
     const deadline = Date.now() + maxMs;
     while (Date.now() < deadline) {
       const url = getCaptionUrl(videoId);
-      if (url) return url;
+      if (url) { const r = await tryUrl(url); if (r) return r; }
       await new Promise<void>(r => setTimeout(r, 300));
     }
 
     // 5. type=list API
-    return fetchCaptionUrlFromApi(videoId);
+    const listUrl = await fetchCaptionUrlFromApi(videoId);
+    if (listUrl) { const r = await tryUrl(listUrl); if (r) return r; }
+
+    return null;
   }
 
   private async waitForPlayer(maxMs = 10000): Promise<void> {
@@ -214,7 +220,6 @@ export class YoutubeCaptionTranslator {
     el.textContent = initialText;
     document.body.appendChild(el);
     this.overlay = el;
-    // Position immediately based on current video rect
     const video = document.querySelector<HTMLVideoElement>('video');
     if (video) this.positionOverlay(el, video);
   }
@@ -258,11 +263,8 @@ export class YoutubeCaptionTranslator {
       const seg = this.segments.find(s => ms >= s.startMs && ms < s.endMs);
       const key = `${seg?.startMs ?? ''}`;
       if (key !== lastKey) {
-        // Show '…' while this segment's translation is still pending
         this.overlay.textContent = seg ? (seg.translation ?? '…') : '';
         lastKey = key;
-      } else if (seg && !seg.translation && this.overlay.textContent !== '…') {
-        // Translation arrived — update if we were showing placeholder
       } else if (seg?.translation && this.overlay.textContent === '…') {
         this.overlay.textContent = seg.translation;
       }

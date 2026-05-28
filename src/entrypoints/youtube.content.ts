@@ -1,5 +1,5 @@
 import { YoutubeCaptionTranslator } from '../lib/youtube-caption';
-import type { TranslateBatchMessage, TranslateBatchResult, TranslateMessage, TranslateResult } from '../lib/types';
+import type { FetchVttMessage, FetchVttResult, TranslateBatchMessage, TranslateBatchResult, TranslateMessage, TranslateResult } from '../lib/types';
 
 const BUTTON_ID = 'xt-caption-toggle';
 const BUTTON_ON_TITLE = '關閉字幕翻譯';
@@ -22,6 +22,7 @@ export default defineContentScript({
         return result.ok ? result.translation : null;
       },
       sendTranslateBatch,
+      fetchVttViaBackground,
     );
 
     function updateButtonState(btn: HTMLButtonElement) {
@@ -111,6 +112,16 @@ function sendTranslateBatch(texts: string[]): Promise<(string | null)[]> {
     chrome.runtime.sendMessage(msg, (result: TranslateBatchResult) => {
       void chrome.runtime.lastError;
       resolve(result?.ok ? result.translations : texts.map(() => null));
+    });
+  });
+}
+
+function fetchVttViaBackground(url: string): Promise<string | null> {
+  return new Promise(resolve => {
+    const msg: FetchVttMessage = { type: 'fetch-vtt', url };
+    chrome.runtime.sendMessage(msg, (result: FetchVttResult) => {
+      void chrome.runtime.lastError;
+      resolve(result?.ok ? result.content : null);
     });
   });
 }

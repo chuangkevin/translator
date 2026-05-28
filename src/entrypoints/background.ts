@@ -2,7 +2,7 @@ import { OpenCodeClient } from '../lib/opencode-client';
 import { Translator } from '../lib/translator';
 import { getSettings } from '../lib/storage';
 import { TranslationCache, cacheKey } from '../lib/translation-cache';
-import type { ExtensionSettings, TranslateMessage, TranslateResult, TranslateBatchMessage, TranslateBatchResult } from '../lib/types';
+import type { ExtensionSettings, FetchVttMessage, FetchVttResult, TranslateMessage, TranslateResult, TranslateBatchMessage, TranslateBatchResult } from '../lib/types';
 
 const CACHE_STORAGE_KEY = 'xt_cache';
 
@@ -224,6 +224,26 @@ export default defineBackground(() => {
         }
       })();
 
+      return true;
+    },
+  );
+
+  // VTT proxy: content scripts can't fetch YouTube's timedtext because YouTube's
+  // own service worker intercepts the request and returns empty HTML. The background
+  // SW is outside youtube.com's context, so it fetches directly from the network.
+  chrome.runtime.onMessage.addListener(
+    (message: FetchVttMessage, _sender, sendResponse: (r: FetchVttResult) => void) => {
+      if (message.type !== 'fetch-vtt') return false;
+      (async () => {
+        try {
+          const resp = await fetch(message.url);
+          if (!resp.ok) { sendResponse({ ok: false, error: `HTTP ${resp.status}` }); return; }
+          const content = await resp.text();
+          sendResponse({ ok: true, content });
+        } catch (e) {
+          sendResponse({ ok: false, error: String(e) });
+        }
+      })();
       return true;
     },
   );
