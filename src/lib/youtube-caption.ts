@@ -66,6 +66,7 @@ export class YoutubeCaptionTranslator {
       this.navigateListener = null;
     }
     this.cleanup();
+    this.currentVideoId = null;
   }
 
   private getVideoId(): string | null {
@@ -199,6 +200,5 @@ export class YoutubeCaptionTranslator {
     this.overlay?.remove();
     this.overlay = null;
     this.segments = [];
-    this.currentVideoId = null;
   }
 }
